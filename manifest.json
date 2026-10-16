@@ -1,12 +1,15 @@
 {
+  "id": "./",
   "name": "Neon Harbor Run",
   "short_name": "Harbor Run",
-  "description": "Endless neon Tokyo runner. Steal the shards, dodge the gang.",
+  "description": "Endless neon Tokyo runner. Steal the shards, dodge the gang. Play free.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#07040f",
   "theme_color": "#07040f",
   "orientation": "any",
+  "categories": ["games", "entertainment"],
   "icons": [
     {
       "src": "favicon.svg",

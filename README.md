@@ -1,4 +1,8 @@
-# NEON HARBOR RUN — Tokyo Night Runner (v0.4)
+# NEON HARBOR RUN — Tokyo Night Runner
+
+**Play now:** [https://notheater.github.io/neon-harbor-run/](https://notheater.github.io/neon-harbor-run/)
+
+On a phone, open that link in Chrome or Safari and use **Add to Home Screen** — it installs like an app (no store account). Share the same link with anyone.
 
 A Temple-Run-style endless runner built with plain JavaScript and Three.js. You have stolen the Crimson Lotus gang's data shards and they are right behind you. Sprint down endless rain-slick neon streets, switch lanes, jump barriers, slide under gates, take the 90° corners and grab shards. Two mistakes and the gang catches you.
 
@@ -28,9 +32,11 @@ A Temple-Run-style endless runner built with plain JavaScript and Three.js. You 
 3. On a phone, send someone the folder (or host it) and open the same `index.html` in the browser. Use the on-screen buttons or swipe. Keyboard and USB/Bluetooth gamepads work on computer. No account.
 
 ## Play online
+**Live site:** [https://notheater.github.io/neon-harbor-run/](https://notheater.github.io/neon-harbor-run/)
+
 This folder **is** the website: `index.html` at the root, plus `style.css`, `game.js`, `human.js`, and `vendor/`. Host it on any static file server.
 
-**GitHub Pages:** push this folder to a public repo, then Settings → Pages → *Deploy from a branch* → `main` / `(root)`. The game is at `https://<user>.github.io/<repo>/`.
+**GitHub Pages:** already published from `main`. A custom domain (like neonharbor.run) can be pointed at Pages later if you buy one.
 
 **itch.io:** zip so `index.html` is at the zip root, create an **HTML** project, tick *This file will be played in the browser*, ~1280×720 embed, fullscreen on.
 

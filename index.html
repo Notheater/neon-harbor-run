@@ -15,6 +15,8 @@
 <meta property="og:title" content="Neon Harbor Run">
 <meta property="og:description" content="Endless neon Tokyo runner. Play free in the browser.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://notheater.github.io/neon-harbor-run/">
+<link rel="apple-touch-icon" href="favicon.svg">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -87,6 +89,7 @@
   </div>
   <button id="startBtn" type="button">PLAY</button>
   <button type="button" class="alt" id="fsTitle">Fullscreen</button>
+  <button type="button" class="alt" id="shareBtn">Share</button>
   <p class="note">Works in any modern browser. No account, no download. Pause with Esc, P, or the pause button.</p>
 </div></div>
 <div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2>
@@ -94,8 +97,9 @@
   <label class="optline"><input type="checkbox" id="optLiteP"> Lighter graphics</label>
   <button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button>
 </div></div>
-<div id="catch" class="screen hidden"><div class="card panel catchcard">
+<div id="catch" class="screen hidden"><div class="grab"></div><div class="card panel catchcard">
   <div class="label bad">Hands on your jacket</div><h2>THEY GOT YOU</h2>
+  <p>Crimson Lotus has you. The shards are gone.</p>
 </div></div>
 <div id="over" class="screen hidden"><div class="card panel">
   <div class="label bad">The gang caught you</div><h2>RUN OVER</h2>
@@ -110,5 +114,8 @@
 <script src="vendor/three.min.js"></script>
 <script src="human.js"></script>
 <script src="game.js"></script>
+<script>
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(function () {});
+</script>
 </body>
 </html>

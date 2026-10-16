@@ -15,13 +15,14 @@ if (typeof THREE === 'undefined') { show('title', false); $('fatal').textContent
 /* ---------- tunables ---------- */
 const LANE = 2.6, CH = 40, BASE = 20, MAXS = 44, ACC = .55, AHEAD = 7, BEHIND = 1;     // 7 chunks ahead = 280 m, beyond the 240 m fog
 const GAP0 = 14, GAP_MIN = 2.2, STAND_H = 2.2, SLIDE_H = 1.1, JUMP_V = 11, GRAV = 30;
-const TURN_WINDOW = 26, INV = 1.1;
+const TURN_WINDOW = 28, INV = 1.15;
 let level = 1, xp = 0, lastStage = 0, stageHits = 0, xpPopT = 0;
 const xpNeed = lv => Math.round(220 * Math.pow(1.4, lv - 1));
 const SKINS = [
   { id: 'cyan', name: 'Harbor Cyan', lv: 1, jacket: 0x14b8e0, trim: 0x64e6ff, sole: 0xff3df2, tip: 0xff3df2 },
   { id: 'volt', name: 'Volt Magenta', lv: 2, jacket: 0x5b1ad6, trim: 0xff3df2, sole: 0x64e6ff, tip: 0xffd166 },
   { id: 'gold', name: 'Night Gold', lv: 3, jacket: 0x2a220e, trim: 0xffd166, sole: 0xffc078, tip: 0xffd166 },
+  { id: 'ion', name: 'Ion White', lv: 4, jacket: 0xdde8f4, trim: 0x64e6ff, sole: 0x9b6bff, tip: 0xffffff },
   { id: 'lotus', name: 'Lotus Red', lv: 5, jacket: 0x1a080c, trim: 0xff2a3c, sole: 0xff2a3c, tip: 0xff2a3c }
 ];
 function readJSON(key, fb) { try { return Object.assign({}, fb, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return Object.assign({}, fb); } }
@@ -236,7 +237,7 @@ function ensureLayout(i) {
     L.safeEnd = safe;
     L.piece = piece; L.dist = districtOf(k).id;
     if (k >= 2 && r() < .85) { const lane = L.safeRow1 !== undefined ? L.safeRow1 : Math.floor(r() * 3) - 1; for (let j = 0; j < 5; j++) {
-      const power = r() < .12 ? (['magnet', 'shield', 'hack'][(r() * 3) | 0]) : null;
+      const power = r() < .2 ? (['magnet', 'shield', 'hack'][(r() * 3) | 0]) : null;
       L.shards.push({ s: k * CH + 18 + j * 2, lane, got: false, mesh: null, power }); } }
     // buildings (local frame: forward = -z, road half-width 5). Slots are skipped near corners so streets never collide.
     const prevTurn = prev && prev.turn;
@@ -331,9 +332,9 @@ const score = () => Math.floor(P.s) + P.shards * 10;
 let ac = null;
 function beep(f, d = .08, type = 'square', v = .04) { if (settings.mute) return; try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch (e) { /* audio optional */ } }
 function grantPower(kind) {
-  if (kind === 'magnet') { magT = 6; toast('MAGNET · shards pull in', 1400); }
+  if (kind === 'magnet') { magT = 7.5; toast('MAGNET · shards pull in', 1400); }
   else if (kind === 'shield') { shield = 1; toast('SHIELD · one hit absorbed', 1400); }
-  else if (kind === 'hack') { hackT = 5; P.gap = Math.min(GAP0, P.gap + 4); toast('HACK · lights stall the gang', 1400); fx('hackFx'); }
+  else if (kind === 'hack') { hackT = 6; P.gap = Math.min(GAP0, P.gap + 5); toast('HACK · lights stall the gang', 1400); fx('hackFx'); }
   beep(1040, .12, 'sine', .05);
 }
 function kick(n = .28) { punch = Math.max(punch, n); }
@@ -427,16 +428,17 @@ function caught() { if (state !== 'playing') return; state = 'over'; P.gap = Mat
   if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); }
   setTouch(false); beep(70, .6, 'sawtooth', .07);
   if (TEST) { show('over', true); show('catch', false); }
-  else { catchT = 1.35; show('catch', true); show('over', false); }
+  else { catchT = 2.15; shake = .55; squash = .7; kick(.55); flash(); show('catch', true); show('over', false); }
 }
 
 /* ---------- actors, camera, HUD ---------- */
 const V = new THREE.Vector3(), fogTgt = new THREE.Color();
 function placeActors(dt) {
   const p = posAt(P.s, P.x); P.yaw += angDiff(P.yaw, p.th) * (1 - Math.exp(-10 * Math.max(dt, .016)));
-  const g = player.g; g.position.set(p.x + P.ox, P.y, p.z + P.oz); g.rotation.y = P.yaw; g.rotation.z = -(P.lane * LANE - P.x) * .06;
-  g.scale.set(1, squash, 1);
   const catching = catchT > 0, sl = P.slide > 0 && !P.jump, wk = state === 'playing' ? 1 : 0; P.walk += dt * (12 + P.speed * .4);
+  const g = player.g; g.position.set(p.x + P.ox, P.y, p.z + P.oz); g.rotation.y = P.yaw + (catching ? Math.sin(time * 18) * .12 : 0);
+  g.rotation.x = catching ? .22 : 0; g.rotation.z = -(P.lane * LANE - P.x) * .06 + (catching ? Math.sin(time * 22) * .18 : 0);
+  g.scale.set(catching ? 1.04 : 1, squash * (catching ? .88 : 1), catching ? 1.04 : 1);
   H.animate(player, { phase: P.walk, run: catching ? 0 : wk, air: P.jump || P.queueSlide, slide: sl, stumble: P.stumble > 0 || catching, catch: catching, speed01: (P.speed - BASE) / (MAXS - BASE) * .6 + .4, lat: P.lane * LANE - P.x }, dt);
   g.visible = P.inv <= 0 || Math.floor(time * 16) % 2 === 0; blob.position.set(g.position.x, .06, g.position.z); blob.rotation.z = P.yaw; blob.scale.setScalar(Math.max(.4, 1 - P.y * .25));
   chasers.forEach((c, i) => {
@@ -452,12 +454,13 @@ function placeActors(dt) {
 }
 function updCam(dt) {
   const g = player.g.position; P.camYaw += angDiff(P.camYaw, layout[Math.max(0, Math.floor(P.s / CH))].th) * (1 - Math.exp(-4.5 * dt));
-  const sn = Math.sin(P.camYaw), cs = Math.cos(P.camYaw), bounce = shake > 0 ? 1 : 0, kickY = punch * 1.1;
-  camera.position.set(g.x + sn * 7.4 + rr(-1, 1) * shake * .25 * bounce, 4.3 + P.y * .35 + rr(-1, 1) * shake * .25 * bounce + kickY, g.z + cs * 7.4);
-  camera.lookAt(g.x - sn * 9, 1.3 + P.y * .4, g.z - cs * 9);
+  const catching = catchT > 0, sn = Math.sin(P.camYaw), cs = Math.cos(P.camYaw), bounce = shake > 0 || catching ? 1 : 0, kickY = punch * 1.1;
+  const back = catching ? 4.1 : 7.4, camY = catching ? 2.6 : 4.3 + P.y * .35;
+  camera.position.set(g.x + sn * back + rr(-1, 1) * shake * .35 * bounce, camY + rr(-1, 1) * shake * .3 * bounce + kickY, g.z + cs * back);
+  camera.lookAt(g.x - sn * (catching ? 3 : 9), catching ? 1.05 : 1.3 + P.y * .4, g.z - cs * (catching ? 3 : 9));
   const dist = districtOf(P.k);
   scene.fog.color.lerp(fogTgt.setHex(dist.fog), 1 - Math.exp(-2 * dt)); scene.background.copy(scene.fog.color); scene.fog.density += (dist.dens - scene.fog.density) * (1 - Math.exp(-2 * dt));
-  const fov = 68 + (P.speed - BASE) / (MAXS - BASE) * 18 + punch * 14; if (Math.abs(camera.fov - fov) > .05) { camera.fov = damp(camera.fov, fov, 8, dt); camera.updateProjectionMatrix(); }
+  const fov = (catching ? 78 : 68) + (P.speed - BASE) / (MAXS - BASE) * 18 + punch * 14; if (Math.abs(camera.fov - fov) > .05) { camera.fov = damp(camera.fov, fov, 8, dt); camera.updateProjectionMatrix(); }
   sky.position.copy(camera.position); skyline.position.x = camera.position.x; skyline.position.z = camera.position.z;
 }
 const last = {}; const setT = (id, v) => { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } };
@@ -573,6 +576,14 @@ if ($('optTouch')) $('optTouch').addEventListener('change', () => { settings.tou
 if ($('optSkin')) $('optSkin').addEventListener('change', () => { settings.skin = $('optSkin').value; saveSet(); applySkin(); });
 if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute = !settings.mute; saveSet(); syncOpts(); });
 ['fsTitle', 'fsHud'].forEach(id => { if ($(id)) $(id).addEventListener('click', goFs); });
+const PLAY_URL = 'https://notheater.github.io/neon-harbor-run/';
+if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
+  const data = { title: 'Neon Harbor Run', text: 'Endless neon Tokyo runner — play free in the browser.', url: PLAY_URL };
+  const done = () => { const b = $('shareBtn'); if (b) { b.textContent = 'Link copied'; setTimeout(() => { b.textContent = 'Share'; }, 1600); } };
+  if (navigator.share) navigator.share(data).catch(() => {});
+  else if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(PLAY_URL).then(done).catch(done);
+  else done();
+});
 
 /* ---------- init ---------- */
 fillSkinSelect(); syncOpts(); applyLite();
