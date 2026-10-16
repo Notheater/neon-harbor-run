@@ -1,0 +1,7 @@
+{
+  "name": "neon-harbor-run-tests",
+  "private": true,
+  "description": "Headless gameplay-logic tests for Neon Harbor Run (jsdom, no GPU needed)",
+  "scripts": { "test": "node headless-test.js" },
+  "devDependencies": { "jsdom": "^24.0.0" }
+}

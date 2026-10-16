@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Neon Harbor Run">
+<meta name="theme-color" content="#07040f">
+<title>Neon Harbor Run</title>
+<meta name="description" content="Endless neon Tokyo runner. Steal the shards, dodge the gang. Play free in the browser on phone, computer, or controller.">
+<meta name="application-name" content="Neon Harbor Run">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta property="og:title" content="Neon Harbor Run">
+<meta property="og:description" content="Endless neon Tokyo runner. Play free in the browser.">
+<meta property="og:type" content="website">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="hud" class="hidden">
+  <div id="brand" class="panel"><div class="eyebrow">TOKYO NIGHT • ENDLESS RUN</div><h1>NEON HARBOR RUN</h1></div>
+  <div id="score" class="panel">
+    <div class="label">Score</div><div id="scoreTxt" class="big">0</div>
+    <div class="row">Distance <b id="distTxt">0 m</b> &nbsp; Shards <b id="shardsTxt">0</b></div>
+    <div class="row">Best <b id="bestTxt">0</b></div>
+  </div>
+  <div id="vitals" class="panel">
+    <div class="label">Gang distance</div><div class="track"><div id="hpFill" class="fill hp"></div></div>
+    <div class="label">Speed</div><div class="track"><div id="stFill" class="fill st"></div></div>
+    <div class="lvlrow"><span class="label">Level <b id="lvlTxt">1</b></span><span id="xpNum">0 / 220 XP</span></div>
+    <div class="track xp"><div id="xpFill" class="fill xp"></div></div>
+    <div class="label">Objective</div>
+    <p id="objTxt" class="objline">Learn the street — jump, slide, switch lanes</p>
+  </div>
+  <div id="controls" class="panel">
+    <div><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> Switch lane &amp; turn corners</div>
+    <div><kbd>W</kbd> / <kbd>Space</kbd> Jump &nbsp; <kbd>S</kbd> / <kbd>Shift</kbd> Slide</div>
+    <div><kbd>Esc</kbd> / <kbd>P</kbd> Pause</div>
+  </div>
+  <div id="prompt"></div>
+  <div id="toast" class="panel"></div>
+  <div id="xpPop"></div>
+  <div id="touch" class="hidden">
+    <button type="button" class="pad" data-act="left" aria-label="Left">◀</button>
+    <div class="padcol">
+      <button type="button" class="pad" data-act="jump" aria-label="Jump">JUMP</button>
+      <button type="button" class="pad" data-act="slide" aria-label="Slide">SLIDE</button>
+    </div>
+    <button type="button" class="pad" data-act="right" aria-label="Right">▶</button>
+    <button type="button" class="pad alt" id="pauseTouch" aria-label="Pause">❚❚</button>
+  </div>
+</div>
+<div id="dmg"></div>
+<div id="lvlFx"></div>
+<div id="hackFx"></div>
+
+<div id="title" class="screen"><div class="card panel">
+  <div class="label">Free to play · phone, computer, or controller</div>
+  <h2>NEON HARBOR RUN</h2>
+  <p>You stole the Crimson Lotus shards. They are already behind you. Dodge, grab data, level up — two stumbles and they catch you.</p>
+  <div class="grid">
+    <div><b>Phone:</b> on-screen buttons, or swipe</div><div><b>Swipe</b> left/right to change lanes</div>
+    <div><b>Swipe up</b> to jump</div><div><b>Swipe down</b> to slide</div>
+    <div><b>Computer:</b> arrows or WASD</div><div><b>Controller:</b> stick / D-pad, A jump, B slide</div>
+    <div>Low barrier → <b>jump</b></div><div>Overhead gate → <b>slide</b> • Wall → <b>switch lane</b></div>
+  </div>
+  <button id="startBtn" type="button">PLAY</button>
+  <p class="note">Works in any modern browser. No account, no download. Pause with Esc, P, or the pause button.</p>
+</div></div>
+<div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2><button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button></div></div>
+<div id="over" class="screen hidden"><div class="card panel">
+  <div class="label bad">The gang caught you</div><h2>RUN OVER</h2><p id="overStats"></p>
+  <button id="rs2">RUN AGAIN</button></div></div>
+<div id="fatal" class="hidden"></div>
+
+<!-- Three.js r149 is bundled locally: no internet connection or web server needed. -->
+<script src="vendor/three.min.js"></script>
+<script src="human.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
