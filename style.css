@@ -105,3 +105,17 @@ button:hover { filter:brightness(1.1); }
   #touch { opacity:.35; }
   #touch:hover, #touch:focus-within { opacity:1; }
 }
+#hudBtns { position:absolute; top:20px; left:50%; transform:translateX(-50%); display:flex; gap:8px; pointer-events:auto; z-index:9; }
+button.tiny { min-width:40px; padding:8px 10px; font-size:16px; background:#ffffff1c; color:#fff; border:1px solid #ffffff40; }
+.opts { text-align:left; margin:0 0 16px; font-size:13px; color:#d5def0; display:grid; gap:8px; }
+.opts label, .optline { display:flex; align-items:center; gap:8px; }
+.opts select { background:#12081c; color:#fff; border:1px solid #ffffff40; border-radius:8px; padding:6px 8px; }
+.optline { justify-content:center; margin:0 0 10px; color:#d5def0; font-size:13px; }
+.powerline { min-height:1.2em; color:#7dffd4 !important; }
+.recap { color:#ffd166 !important; font-weight:700; }
+.unlock { color:#6dffb0 !important; }
+.catchcard h2 { color:#ff8fa3; }
+body.lite #touch { opacity:.9; }
+@media (max-width:900px) {
+  #hudBtns { top:8px; right:8px; left:auto; transform:none; }
+}

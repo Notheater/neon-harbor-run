@@ -92,7 +92,7 @@ function create(opts) {
   });
 
   return { g: root, model, bones: { hips, spine, head, pony, sh, el, hp, kn, an }, mats: M, opts: o,
-    s: { run: 0, air: 0, slide: 0, stum: 0, reach: 0, pony: -.3, ponyZ: 0, t: 0 } };
+    s: { run: 0, air: 0, slide: 0, stum: 0, reach: 0, catch: 0, pony: -.3, ponyZ: 0, t: 0 } };
 }
 
 /* ---- animation ---- */
@@ -100,7 +100,8 @@ function animate(h, a, dt) {
   dt = Math.max(dt || 0, 1 / 120); const s = h.s, B = h.bones; s.t += dt;
   s.run = damp(s.run, a.run || 0, 10, dt); s.air = damp(s.air, a.air ? 1 : 0, 18, dt); s.slide = damp(s.slide, a.slide ? 1 : 0, 16, dt);
   s.stum = damp(s.stum, a.stumble ? 1 : 0, 12, dt); s.reach = damp(s.reach, a.reach || 0, 8, dt);
-  const run = s.run, wa = s.air * (1 - s.slide), ws = s.slide, st = s.stum, ph = a.phase || 0;
+  s.catch = damp(s.catch, a.catch ? 1 : 0, 10, dt);
+  const run = s.run, wa = s.air * (1 - s.slide), ws = s.slide, st = Math.min(1, s.stum + s.catch * .85), ph = a.phase || 0;
   const sn = [Math.sin(ph), Math.sin(ph + Math.PI)], cs = [Math.cos(ph), Math.cos(ph + Math.PI)], mix3 = (r, air, sl) => lerp(lerp(r, air, wa), sl, ws);
   const breathe = Math.sin(s.t * 2.2) * .012 * (1 - run);
 
@@ -120,8 +121,8 @@ function animate(h, a, dt) {
   B.hips.position.y = drop + .045 * run * (1 - wa - ws) * (.5 + .5 * Math.cos(2 * ph)) + breathe;
   // arms: opposite to legs, elbows bent ~90° while running; reach forward when a chaser is close; flail when stumbling
   for (let i = 0; i < 2; i++) {
-    const swing = -.95 * sn[i] * run, shx = mix3(swing, i ? -.8 : 1.8, i ? .5 : -.3) + s.reach * (1.5 - swing) + (Math.sin(ph * 1.7 + i * 2) * 1.0 + .3) * st;
-    B.sh[i].rotation.set(shx, 0, (i ? -1 : 1) * (.08 + .22 * wa + .18 * ws + .15 * st)); B.el[i].rotation.x = mix3(.12 + .95 * run + .35 * Math.max(0, -sn[i]) * run, .6, .3) * (1 - s.reach * .85);
+    const swing = -.95 * sn[i] * run, shx = mix3(swing, i ? -.8 : 1.8, i ? .5 : -.3) + s.reach * (1.5 - swing) + (Math.sin(ph * 1.7 + i * 2) * 1.0 + .3) * st + s.catch * (i ? .4 : 1.6);
+    B.sh[i].rotation.set(shx, 0, (i ? -1 : 1) * (.08 + .22 * wa + .18 * ws + .15 * st + .35 * s.catch)); B.el[i].rotation.x = mix3(.12 + .95 * run + .35 * Math.max(0, -sn[i]) * run, .6, .3) * (1 - s.reach * .85);
   }
   // secondary motion: ponytail streams back with speed and lags lane changes
   const sp = Math.min(1, run * (a.speed01 === undefined ? 1 : a.speed01)), tgt = -(.3 + .85 * sp) + Math.sin(ph * 2) * .12 * run - .5 * wa;

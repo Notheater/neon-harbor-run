@@ -19,7 +19,7 @@
 </head>
 <body>
 <div id="hud" class="hidden">
-  <div id="brand" class="panel"><div class="eyebrow">TOKYO NIGHT • ENDLESS RUN</div><h1>NEON HARBOR RUN</h1></div>
+  <div id="brand" class="panel"><div class="eyebrow" id="districtTxt">TOKYO NIGHT • ENDLESS RUN</div><h1>NEON HARBOR RUN</h1></div>
   <div id="score" class="panel">
     <div class="label">Score</div><div id="scoreTxt" class="big">0</div>
     <div class="row">Distance <b id="distTxt">0 m</b> &nbsp; Shards <b id="shardsTxt">0</b></div>
@@ -32,6 +32,11 @@
     <div class="track xp"><div id="xpFill" class="fill xp"></div></div>
     <div class="label">Objective</div>
     <p id="objTxt" class="objline">Learn the street — jump, slide, switch lanes</p>
+    <p id="powerTxt" class="objline powerline"></p>
+  </div>
+  <div id="hudBtns">
+    <button type="button" class="tiny" id="muteHud" aria-label="Mute">♪</button>
+    <button type="button" class="tiny" id="fsHud" aria-label="Fullscreen">⛶</button>
   </div>
   <div id="controls" class="panel">
     <div><kbd>A</kbd><kbd>D</kbd> / <kbd>←</kbd><kbd>→</kbd> Switch lane &amp; turn corners</div>
@@ -65,12 +70,38 @@
     <div><b>Computer:</b> arrows or WASD</div><div><b>Controller:</b> stick / D-pad, A jump, B slide</div>
     <div>Low barrier → <b>jump</b></div><div>Overhead gate → <b>slide</b> • Wall → <b>switch lane</b></div>
   </div>
+  <div class="opts">
+    <label><input type="checkbox" id="optDaily"> Daily street (same course as everyone today)</label>
+    <label><input type="checkbox" id="optLite"> Lighter graphics</label>
+    <label><input type="checkbox" id="optMute"> Mute</label>
+    <label>Phone controls
+      <select id="optTouch">
+        <option value="auto">Auto</option>
+        <option value="pad">On-screen buttons</option>
+        <option value="swipe">Swipe only</option>
+      </select>
+    </label>
+    <label>Outfit
+      <select id="optSkin"></select>
+    </label>
+  </div>
   <button id="startBtn" type="button">PLAY</button>
+  <button type="button" class="alt" id="fsTitle">Fullscreen</button>
   <p class="note">Works in any modern browser. No account, no download. Pause with Esc, P, or the pause button.</p>
 </div></div>
-<div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2><button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button></div></div>
+<div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2>
+  <label class="optline"><input type="checkbox" id="optMuteP"> Mute</label>
+  <label class="optline"><input type="checkbox" id="optLiteP"> Lighter graphics</label>
+  <button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button>
+</div></div>
+<div id="catch" class="screen hidden"><div class="card panel catchcard">
+  <div class="label bad">Hands on your jacket</div><h2>THEY GOT YOU</h2>
+</div></div>
 <div id="over" class="screen hidden"><div class="card panel">
-  <div class="label bad">The gang caught you</div><h2>RUN OVER</h2><p id="overStats"></p>
+  <div class="label bad">The gang caught you</div><h2>RUN OVER</h2>
+  <p id="overStats"></p>
+  <p id="overRecap" class="recap"></p>
+  <p id="overUnlock" class="unlock"></p>
   <button id="rs2">RUN AGAIN</button></div></div>
 <div id="fatal" class="hidden"></div>
 

@@ -18,6 +18,19 @@ const GAP0 = 14, GAP_MIN = 2.2, STAND_H = 2.2, SLIDE_H = 1.1, JUMP_V = 11, GRAV 
 const TURN_WINDOW = 26, INV = 1.1;
 let level = 1, xp = 0, lastStage = 0, stageHits = 0, xpPopT = 0;
 const xpNeed = lv => Math.round(220 * Math.pow(1.4, lv - 1));
+const SKINS = [
+  { id: 'cyan', name: 'Harbor Cyan', lv: 1, jacket: 0x14b8e0, trim: 0x64e6ff, sole: 0xff3df2, tip: 0xff3df2 },
+  { id: 'volt', name: 'Volt Magenta', lv: 2, jacket: 0x5b1ad6, trim: 0xff3df2, sole: 0x64e6ff, tip: 0xffd166 },
+  { id: 'gold', name: 'Night Gold', lv: 3, jacket: 0x2a220e, trim: 0xffd166, sole: 0xffc078, tip: 0xffd166 },
+  { id: 'lotus', name: 'Lotus Red', lv: 5, jacket: 0x1a080c, trim: 0xff2a3c, sole: 0xff2a3c, tip: 0xff2a3c }
+];
+function readJSON(key, fb) { try { return Object.assign({}, fb, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return Object.assign({}, fb); } }
+const SETD = { touch: 'auto', mute: false, lite: false, daily: false, skin: 'cyan' };
+let settings = TEST ? Object.assign({}, SETD) : readJSON('nhr_set', SETD);
+let meta = TEST ? { maxLv: 1, unlocks: ['cyan'] } : readJSON('nhr_meta', { maxLv: 1, unlocks: ['cyan'] });
+function saveSet() { if (TEST) return; try { localStorage.setItem('nhr_set', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
+function saveMeta() { if (TEST) return; try { localStorage.setItem('nhr_meta', JSON.stringify(meta)); } catch (e) { /* ignore */ } }
+function daySeed() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
 
 /* ---------- utils ---------- */
 const mulberry = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -36,7 +49,7 @@ let renderer = null;
 if (!TEST) {
   try {
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.4));
+    renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio || 1, settings.lite ? 1 : 1.4));
     renderer.outputEncoding = SRGB; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.12;
     document.body.prepend(renderer.domElement);
   } catch (e) { show('title', false); $('fatal').textContent = 'WebGL is not available in this browser, so the game cannot start.'; show('fatal', true); return; }
@@ -100,6 +113,12 @@ function bGeo(w, h, d, color) {                               // box whose UVs t
 }
 const FONT = '"Yu Gothic","Meiryo","MS Gothic","Hiragino Sans","Noto Sans CJK JP",sans-serif';
 const TEXTS = ['ラーメン', '居酒屋', 'カラオケ', '薬局', 'ネオン', '港', '酒場', '電脳', '寿司', '夜', '焼肉', '麻雀', '危険', '走れ'];
+const DISTRICTS = [
+  { id: 'alley', name: 'BACK ALLEYS', fog: 0x0a0618, dens: 0.0085, rain: 1, bcol: [0x1b2040, 0x2a1c4a, 0x14172c, 0x3a1c3e, 0x1c2c44, 0x2b1a30] },
+  { id: 'docks', name: 'NORTH DOCKS', fog: 0x06141c, dens: 0.0072, rain: 1.25, bcol: [0x102030, 0x163040, 0x0c1824, 0x1a2838, 0x0e2230, 0x142838] },
+  { id: 'highway', name: 'ELEVATED RING', fog: 0x14080e, dens: 0.0094, rain: .55, bcol: [0x241018, 0x301420, 0x1a0c14, 0x2c1820, 0x201018, 0x28141c] }
+];
+function districtOf(k) { return DISTRICTS[Math.floor(Math.max(0, k) / 8) % DISTRICTS.length]; }
 const SCOL = ['#21e6ff', '#ff3df2', '#ff2d55', '#ffd166', '#9b6bff'], signCache = {};
 function signMat(t, ci) {
   const k = t + ci; if (signCache[k]) return signCache[k];
@@ -125,10 +144,14 @@ const laneM = (() => {                                        // lane dashes + e
 const gBar = sh(new THREE.BoxGeometry(2.3, .9, .45)), gBarTop = sh(new THREE.BoxGeometry(2.3, .1, .5)), gPost = sh(new THREE.CylinderGeometry(.1, .1, 2.6, 8)), gBeam = sh(new THREE.BoxGeometry(2.4, .4, .5));
 const gWall = sh(new THREE.BoxGeometry(2.3, 3.2, 1)), gFace = sh(new THREE.PlaneGeometry(1.3, 2.4)), gShard = sh(new THREE.OctahedronGeometry(.42, 0));
 const barMat = mat(0x20203a, .5, .3), wallMat = mat(0x1a1530, .6, .2), shardMat = basic(0x70ffe3, { toneMapped: false });
+function hitKind(type) { return type === 'stall' || type === 'barrier' ? 'barrier' : type === 'truck' || type === 'gate' ? 'gate' : 'wall'; }
 function makeObstacle(type, i) {
-  const g = new THREE.Group(), add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); g.add(o); return o; };
+  const g = new THREE.Group(), add = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; g.add(o); return o; };
   if (type === 'barrier') { add(gBar, barMat, 0, .45, 0); add(gBarTop, neonMats[1], 0, .95, 0); }
+  else if (type === 'stall') { add(new THREE.BoxGeometry(2.1, 1.05, 1.4), awnMats[i % 4], 0, .55, 0); add(new THREE.BoxGeometry(2.3, .08, 1.6), neonMats[2], 0, 1.12, 0); }
   else if (type === 'gate') { add(gPost, darkMat, -1.15, 1.3, 0); add(gPost, darkMat, 1.15, 1.3, 0); add(gBeam, redGlow, 0, 1.6, 0); }
+  else if (type === 'truck') { add(new THREE.BoxGeometry(2.4, 1.15, 3.4), mat(0x1a2030, .45, .4), 0, 1.85, 0); add(new THREE.BoxGeometry(2.2, .9, 1.1), neonMats[0], 0, 1.7, -1.4); add(new THREE.BoxGeometry(.4, .4, .18), darkMat, -.7, .35, 1.3); add(new THREE.BoxGeometry(.4, .4, .18), darkMat, .7, .35, 1.3); }
+  else if (type === 'bike') { add(new THREE.TorusGeometry(.38, .06, 8, 12), darkMat, -.35, .38, 0, Math.PI / 2); add(new THREE.TorusGeometry(.38, .06, 8, 12), darkMat, .55, .38, 0, Math.PI / 2); add(new THREE.BoxGeometry(.2, .15, 1.1), neonMats[3], .1, .7, 0); }
   else { add(gWall, wallMat, 0, 1.6, 0); add(gFace, signMat(TEXTS[(i * 7) % TEXTS.length], i % 5), 0, 1.7, .52); }
   return g;
 }
@@ -149,6 +172,14 @@ const chasers = [[0, 0], [1.4, -1.7], [2.6, 1.7], [3.6, -2.4]].map(([off, lx], i
   scene.add(m.g); return { m, off, lx };
 });
 chasers[3].m.g.visible = false;
+function applySkin() {
+  const sk = SKINS.find(s => s.id === settings.skin && (meta.unlocks || []).indexOf(s.id) >= 0) || SKINS[0];
+  settings.skin = sk.id;
+  player.mats.jacket.color.setHex(sk.jacket);
+  player.mats.trim.color.setHex(sk.trim).multiplyScalar(2.2);
+  player.mats.sole.color.setHex(sk.sole).multiplyScalar(2.2);
+  player.mats.tip.color.setHex(sk.tip).multiplyScalar(2.2);
+}
 const sparks = [];
 if (!TEST) {
   for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.12, .12, .12), basic(0x88f0ff, { toneMapped: false })); m.visible = false; scene.add(m); sparks.push({ m, vx: 0, vy: 0, vz: 0, life: 0 }); }
@@ -167,8 +198,16 @@ const RAIN_N = 1800, rainG = new THREE.BufferGeometry(), rainP = new Float32Arra
 for (let i = 0; i < RAIN_N; i++) rainD.push([rr(-22, 22), rr(0, 24), rr(-22, 22)]);
 rainG.setAttribute('position', new THREE.BufferAttribute(rainP, 3));
 const rain = new THREE.LineSegments(rainG, new THREE.LineBasicMaterial({ color: 0x9fd0ff, transparent: true, opacity: .35, fog: false })); rain.frustumCulled = false; scene.add(rain);
+function applyLite() {
+  const lite = !!settings.lite;
+  if (renderer) renderer.setPixelRatio(Math.min(devicePixelRatio || 1, lite ? 1 : 1.4));
+  rain.visible = !lite; skyline.visible = !lite; haze.visible = !lite;
+  if (document.body) document.body.classList.toggle('lite', lite);
+}
 function updRain(dt) {
-  for (let i = 0; i < RAIN_N; i++) { const d = rainD[i]; d[1] -= 38 * dt; if (d[1] < 0) { d[1] = 24; d[0] = rr(-22, 22); d[2] = rr(-22, 22); } rainP.set([d[0], d[1], d[2], d[0] - .12, d[1] + .9, d[2]], i * 6); }
+  if (!rain.visible) return;
+  const n = settings.lite ? 0 : RAIN_N, dist = districtOf(P.k);
+  for (let i = 0; i < n; i++) { const d = rainD[i]; d[1] -= 38 * dist.rain * dt; if (d[1] < 0) { d[1] = 24; d[0] = rr(-22, 22); d[2] = rr(-22, 22); } rainP.set([d[0], d[1], d[2], d[0] - .12, d[1] + .9, d[2]], i * 6); }
   rainG.attributes.position.needsUpdate = true; rain.position.set(camera.position.x, 0, camera.position.z);
 }
 
@@ -184,6 +223,7 @@ function ensureLayout(i) {
     if (k >= 6 && k - lastCorner >= 5 && r() < .4) { L.turn = r() < .5 ? 1 : -1; lastCorner = k; }       // +1 = left corner, -1 = right corner
     // obstacle rows: every row keeps one completely free lane, and consecutive free lanes are at most one lane apart (always dodgeable)
     let safe = prev ? prev.safeEnd : 0; L.safeStart = safe;
+    const piece = !noObstacles && !L.turn && k >= 6 && k % 5 === 0;
     const dense = level >= 8 ? [10, 22, 34] : level >= 5 ? [12, 26, 36] : [14, 30];
     const rowsAt = k < 3 || noObstacles ? [] : L.turn ? [14] : dense;
     rowsAt.forEach(sl => { safe = clamp(safe + Math.floor(r() * 3) - 1, -1, 1); if (sl === 14) L.safeRow1 = safe;
@@ -191,9 +231,13 @@ function ensureLayout(i) {
         let type = t < .3 ? null : t < .55 ? 'barrier' : t < .78 ? 'gate' : 'wall';
         if (level >= 3 && type === 'barrier' && r() < .35) type = 'gate';
         if (level >= 8 && type && r() < .25) type = 'wall';
+        if (piece && type) type = type === 'barrier' ? 'stall' : type === 'gate' ? 'truck' : 'bike';
         if (type) L.rows.push({ s: k * CH + sl, lane, type, hit: false, mesh: null }); } });
     L.safeEnd = safe;
-    if (k >= 2 && r() < .85) { const lane = L.safeRow1 !== undefined ? L.safeRow1 : Math.floor(r() * 3) - 1; for (let j = 0; j < 5; j++) L.shards.push({ s: k * CH + 18 + j * 2, lane, got: false, mesh: null }); }
+    L.piece = piece; L.dist = districtOf(k).id;
+    if (k >= 2 && r() < .85) { const lane = L.safeRow1 !== undefined ? L.safeRow1 : Math.floor(r() * 3) - 1; for (let j = 0; j < 5; j++) {
+      const power = r() < .12 ? (['magnet', 'shield', 'hack'][(r() * 3) | 0]) : null;
+      L.shards.push({ s: k * CH + 18 + j * 2, lane, got: false, mesh: null, power }); } }
     // buildings (local frame: forward = -z, road half-width 5). Slots are skipped near corners so streets never collide.
     const prevTurn = prev && prev.turn;
     for (const side of [-1, 1]) for (let j = 0; j < 3; j++) {
@@ -225,7 +269,7 @@ function mergeGroup(g) {                                      // bake flagged st
   }
 }
 function buildChunk(k) {
-  const L = layout[k], g = new THREE.Group(), r = chunkRand(k + 99991), R = (a, b) => a + r() * (b - a), P_ = a => a[(r() * a.length) | 0];
+  const L = layout[k], dist = districtOf(k), g = new THREE.Group(), r = chunkRand(k + 99991), R = (a, b) => a + r() * (b - a), P_ = a => a[(r() * a.length) | 0];
   g.position.set(L.ox, 0, L.oz); g.rotation.y = L.th; scene.add(g); L.group = g;
   const put = (geo, m, x, y, z, ry = 0) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.rotation.y = ry; o.userData.merge = true; g.add(o); return o; };
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(70, 60), groundM); ground.rotation.x = -Math.PI / 2; ground.position.set(0, -.02, -20); g.add(ground);
@@ -234,7 +278,7 @@ function buildChunk(k) {
   for (const sx of [-6.35, 6.35]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 50), walkM); w.rotation.x = -Math.PI / 2; w.position.set(sx, .025, -20); g.add(w); }
   for (let i = 0; i < 4; i++) { const d = put(new THREE.PlaneGeometry(R(4, 9), R(2, 5)), P_(decalMats), R(-3, 3), .05, -R(2, 42)); d.rotation.x = -Math.PI / 2; d.rotation.z = R(0, 3); }
   for (const b of L.bld) {                                    // buildings + street-facing decoration
-    const w = b.x1 - b.x0, d = b.z1 - b.z0, m = new THREE.Mesh(bGeo(w, b.h, d, BCOL[b.col]), winMats[b.win]); m.position.set((b.x0 + b.x1) / 2, b.h / 2, b.zc); g.add(m);
+    const w = b.x1 - b.x0, d = b.z1 - b.z0, m = new THREE.Mesh(bGeo(w, b.h, d, dist.bcol[b.col % dist.bcol.length]), winMats[b.win]); m.position.set((b.x0 + b.x1) / 2, b.h / 2, b.zc); g.add(m);
     if (!b.side) { put(new THREE.PlaneGeometry(4, 8), signMat('港', 1), 0, 13, b.z1 + .05, 0); continue; }
     const s = b.side, fx = s * 7.5, ry = -s * Math.PI / 2;
     put(new THREE.PlaneGeometry(4.2, 1.6), P_(shopMats), fx - s * .04, 1.5, b.zc, ry);
@@ -252,24 +296,47 @@ function buildChunk(k) {
       if (!TEST) { const spr = new THREE.Sprite(glowSpr); spr.position.set(fx - s * .45, 2.55, b.zc); spr.scale.set(2.8, 3.4, 1); g.add(spr); }
     }
   }
-  if (k % 3 === 0) {                                          // torii arch over the road
+  if (k % 3 === 0 && dist.id === 'alley') {                   // torii arch over the road
     for (const x of [-6.2, 6.2]) put(new THREE.CylinderGeometry(.32, .38, 7, 10), toriiRed, x, 3.5, -2);
     put(new THREE.BoxGeometry(15, .5, .8), darkMat, 0, 7.2, -2); put(new THREE.BoxGeometry(12, .32, .45), toriiRed, 0, 6.0, -2);
   }
+  if (dist.id === 'docks') {
+    put(new THREE.BoxGeometry(1.2, .9, 8), mat(0x2a2418, .7), 8.6, .45, -18);
+    put(new THREE.BoxGeometry(.15, 4.5, .15), darkMat, 9.2, 2.2, -8);
+  } else if (dist.id === 'highway') {
+    put(new THREE.BoxGeometry(18, .18, 2.2), neonMats[0], 0, 5.4, -20);
+    put(new THREE.BoxGeometry(.2, 5.2, .2), darkMat, -7.2, 2.5, -12);
+    put(new THREE.BoxGeometry(.2, 5.2, .2), darkMat, 7.2, 2.5, -12);
+  }
+  if (L.piece) {
+    put(new THREE.BoxGeometry(1.6, 1.4, 1.1), awnMats[k % 4], -7.4, .7, -22);
+    put(new THREE.BoxGeometry(2.8, 1.1, 4.2), mat(0x151820, .5, .35), 8.2, 1.2, -28);
+  }
   mergeGroup(g);
   L.rows.forEach((o, i) => { const m = makeObstacle(o.type, k * 3 + i); m.position.set(o.lane * LANE, 0, -(o.s - k * CH)); g.add(m); o.mesh = m; });
-  L.shards.forEach(o => { const m = new THREE.Mesh(gShard, shardMat); m.position.set(o.lane * LANE, 1.2, -(o.s - k * CH)); g.add(m); o.mesh = m; });
+  L.shards.forEach(o => {
+    const m = new THREE.Mesh(gShard, o.power ? basic(o.power === 'shield' ? 0xffd166 : o.power === 'hack' ? 0xff3df2 : 0x70ffe3, { toneMapped: false }) : shardMat);
+    m.position.set(o.lane * LANE, 1.2, -(o.s - k * CH)); g.add(m); o.mesh = m;
+  });
 }
 function freeChunk(k) { const L = layout[k]; if (!L || !L.group) return; scene.remove(L.group); L.group.traverse(o => { if (o.isMesh && !SHARED.has(o.geometry)) o.geometry.dispose(); }); L.group = null; L.rows.forEach(o => o.mesh = null); L.shards.forEach(o => o.mesh = null); }
 function ensureWindow() { const k0 = Math.max(0, P.k - BEHIND), k1 = P.k + AHEAD; ensureLayout(k1); for (let k = k0; k <= k1; k++) if (!layout[k].group) buildChunk(k); for (let k = 0; k < k0; k++) freeChunk(k); }
 
 /* ---------- state ---------- */
-let state = 'title', time = 0, shake = 0, toastT = 0, best = 0; const log = { stumbles: [], toasts: [], turns: [] };
+let state = 'title', time = 0, shake = 0, toastT = 0, best = 0, punch = 0, squash = 1, catchT = 0, magT = 0, shield = 0, hackT = 0, lastNear = 0, lastWhy = '', padLive = false;
+const log = { stumbles: [], toasts: [], turns: [] };
 const P = { s: 0, k: 0, x: 0, lane: 0, y: 0, vy: 0, jump: false, slide: 0, queueSlide: false, speed: BASE, inv: 0, stumble: 0, sinceHit: 9, gap: GAP0, yaw: 0, camYaw: 0, pend: 0, ox: 0, oz: 0, shards: 0, walk: 0 };
 try { best = +localStorage.getItem('nhr_best') || 0; } catch (e) { /* storage may be blocked */ }
 const score = () => Math.floor(P.s) + P.shards * 10;
 let ac = null;
-function beep(f, d = .08, type = 'square', v = .04) { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch (e) { /* audio optional */ } }
+function beep(f, d = .08, type = 'square', v = .04) { if (settings.mute) return; try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch (e) { /* audio optional */ } }
+function grantPower(kind) {
+  if (kind === 'magnet') { magT = 6; toast('MAGNET · shards pull in', 1400); }
+  else if (kind === 'shield') { shield = 1; toast('SHIELD · one hit absorbed', 1400); }
+  else if (kind === 'hack') { hackT = 5; P.gap = Math.min(GAP0, P.gap + 4); toast('HACK · lights stall the gang', 1400); fx('hackFx'); }
+  beep(1040, .12, 'sine', .05);
+}
+function kick(n = .28) { punch = Math.max(punch, n); }
 function toast(msg, ms = 1600) { log.toasts.push(msg); const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => t.style.opacity = 0, ms); }
 function flash() { const el = $('dmg'); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
 function fx(id) { const el = $(id); if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
@@ -281,44 +348,54 @@ function popXp(n, label) {
 function addXp(n, label) {
   if (n <= 0 || state !== 'playing') return;
   xp += n | 0; popXp(n | 0, label);
-  while (xp >= xpNeed(level)) { xp -= xpNeed(level); level++; fx('lvlFx'); toast('LEVEL UP · ' + level, 1800); beep(920, .16, 'sine', .06); }
+  while (xp >= xpNeed(level)) { xp -= xpNeed(level); level++; fx('lvlFx'); toast('LEVEL UP · ' + level, 1800); beep(920, .16, 'sine', .06); kick(.25);
+    if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); fillSkinSelect(); } }
 }
 
 function resetRun() {
-  for (let k = 0; k < layout.length; k++) freeChunk(k); layout.length = 0; lastCorner = -9; if (!TEST) runSeed = (Date.now() % 100000) + 1;
+  for (let k = 0; k < layout.length; k++) freeChunk(k); layout.length = 0; lastCorner = -9;
+  if (!TEST) runSeed = settings.daily ? daySeed() : (Date.now() % 100000) + 1;
   Object.assign(P, { s: 0, k: 0, x: 0, lane: 0, y: 0, vy: 0, jump: false, slide: 0, queueSlide: false, speed: BASE, inv: 0, stumble: 0, sinceHit: 9, gap: GAP0, yaw: 0, camYaw: 0, pend: 0, ox: 0, oz: 0, shards: 0, walk: 0 });
-  level = 1; xp = 0; lastStage = 0; stageHits = 0; if (chasers[3]) chasers[3].m.g.visible = false;
+  level = 1; xp = 0; lastStage = 0; stageHits = 0; punch = 0; squash = 1; catchT = 0; magT = 0; shield = 0; hackT = 0; lastNear = 0; lastWhy = '';
+  if (chasers[3]) chasers[3].m.g.visible = false;
+  applySkin(); applyLite();
   log.stumbles.length = 0; log.turns.length = 0; ensureLayout(AHEAD + 1); ensureWindow(); placeActors(0);
 }
 
 /* ---------- gameplay ---------- */
 function stumble(why) {
   if (P.inv > 0 || state !== 'playing') return;
+  lastWhy = why;
+  if (shield > 0) {
+    shield = 0; P.inv = INV; P.stumble = .35; shake = .2; kick(.2); beep(740, .1, 'sine', .05); toast('Shield broke — keep running', 1200); burst(player.g.position.x, 1.2, player.g.position.z); return;
+  }
   P.inv = INV; P.stumble = .5; stageHits++;
   P.gap -= 6 * (1 + 0.08 * Math.floor((level - 1) / 3));
-  P.speed = Math.max(BASE, P.speed * .78); P.sinceHit = 0; shake = .35; flash(); beep(110, .18, 'sawtooth', .06);
+  P.speed = Math.max(BASE, P.speed * .78); P.sinceHit = 0; shake = .35; squash = .82; kick(.4); flash(); beep(110, .18, 'sawtooth', .06);
   burst(player.g.position.x, 1.2, player.g.position.z);
-  log.stumbles.push({ s: P.s, why, gap: P.gap }); if (P.gap <= GAP_MIN) caught(); else toast(why === 'turn' ? 'Missed the corner!' : 'Stumble! They are closing in');
+  log.stumbles.push({ s: P.s, why, gap: P.gap }); if (P.gap <= GAP_MIN) caught(); else toast(why === 'turn' ? 'Late on the corner — they close in' : 'Stumble! They are closing in');
 }
 function press(act) {                                         // single entry point for input (keyboard and tests)
   if (state !== 'playing') return;
   if (act === 'left' || act === 'right') {
     const dir = act === 'left' ? 1 : -1, L = layout[P.k];
-    if (L && L.turn === dir && P.s > (P.k + 1) * CH - TURN_WINDOW) { P.pend = dir; beep(520, .05, 'triangle'); return; }   // corner ahead in this direction -> turn
+    if (L && L.turn === dir && P.s > (P.k + 1) * CH - TURN_WINDOW) { P.pend = dir; kick(.12); beep(520, .05, 'triangle'); return; }   // corner ahead in this direction -> turn
     P.lane = clamp(P.lane + (act === 'left' ? -1 : 1), -1, 1); beep(380, .04, 'triangle', .02);
-  } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; beep(600, .08, 'sine', .04); } }
-  else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else P.slide = .75; }
+  } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; squash = 1.16; kick(.18); beep(600, .08, 'sine', .04); } }
+  else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
 }
 function updRun(dt) {
   P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt; P.x = damp(P.x, P.lane * LANE, 22, dt);
   P.sinceHit += dt; P.inv = Math.max(0, P.inv - dt); P.stumble = Math.max(0, P.stumble - dt); P.slide = Math.max(0, P.slide - dt);
-  if (P.jump) { P.y += P.vy * dt; P.vy -= GRAV * dt; if (P.y <= 0) { P.y = 0; P.jump = false; P.vy = 0; if (P.queueSlide) { P.queueSlide = false; P.slide = .6; } } }
-  const recover = level <= 2 ? .5 : Math.max(.35, .5 * (1 - 0.06 * (level - 2)));
+  magT = Math.max(0, magT - dt); hackT = Math.max(0, hackT - dt);
+  squash = damp(squash, P.slide > 0 ? .74 : 1, 14, dt);
+  if (P.jump) { P.y += P.vy * dt; P.vy -= GRAV * dt; if (P.y <= 0) { P.y = 0; P.jump = false; P.vy = 0; squash = .78; kick(.3); if (P.queueSlide) { P.queueSlide = false; P.slide = .6; squash = .7; } } }
+  const recover = (level <= 2 ? .5 : Math.max(.35, .5 * (1 - 0.06 * (level - 2)))) * (hackT > 0 ? 2.2 : 1);
   if (P.sinceHit > 3 && P.gap < GAP0) P.gap = Math.min(GAP0, P.gap + recover * dt);
   // junctions
   while (P.s >= (P.k + 1) * CH) {
     const old = posAt(P.s, P.x, P.k), prevL = layout[P.k]; P.k++; ensureLayout(P.k + AHEAD);
-    if (prevL.turn) { const ok = P.pend === prevL.turn; log.turns.push({ k: P.k, ok }); P.pend = 0; if (!ok) stumble('turn'); else { beep(700, .1, 'sine', .05); toast('Nice turn!', 900); addXp(15, 'turn'); }
+    if (prevL.turn) { const ok = P.pend === prevL.turn; log.turns.push({ k: P.k, ok }); P.pend = 0; if (!ok) stumble('turn'); else { beep(700, .1, 'sine', .05); toast('Threaded the corner', 900); addXp(15, 'turn'); kick(.22); lastNear = P.s; }
       const nw = posAt(P.s, P.x, P.k); P.ox = old.x - nw.x; P.oz = old.z - nw.z; }                // hide the corner pop-in; decays below
     ensureWindow();
   }
@@ -327,9 +404,13 @@ function updRun(dt) {
   const h = P.slide > 0 ? SLIDE_H : STAND_H;
   for (let k = Math.max(0, P.k - 1); k <= P.k + 1; k++) { const L = layout[k]; if (!L) continue;
     for (const o of L.rows) { if (o.hit || o.s < s0 - .85 || o.s > P.s + .85 || Math.abs(P.x - o.lane * LANE) > 1.05) continue;   // swept test: slow frames cannot tunnel through
-      const hitIt = o.type === 'barrier' ? P.y < .95 : o.type === 'gate' ? P.y + h > 1.4 : true;
-      if (hitIt) { o.hit = true; if (o.mesh) o.mesh.visible = false; stumble(o.type); } }
-    for (const o of L.shards) { if (o.got || o.s < s0 - 1.1 || o.s > P.s + 1.1 || Math.abs(P.x - o.lane * LANE) > 1.3 || P.y > 1.6 || h < 1.3) continue; o.got = true; if (o.mesh) o.mesh.visible = false; P.shards++; beep(880 + P.shards % 5 * 80, .07, 'sine', .05); fx('hackFx'); addXp(12, 'shard'); } }
+      const kind = hitKind(o.type), hitIt = kind === 'barrier' ? P.y < .95 : kind === 'gate' ? P.y + h > 1.4 : true;
+      if (hitIt) { o.hit = true; if (o.mesh) o.mesh.visible = false; stumble(o.type); }
+      else if (!o.cleared) { o.cleared = true; lastNear = P.s; kick(.2); beep(980, .05, 'sine', .03); toast(kind === 'gate' || kind === 'truck' ? 'Under!' : 'Close!', 650); } }
+    for (const o of L.shards) {
+      const reach = magT > 0 ? 4 : 1.3;
+      if (o.got || o.s < s0 - 1.1 || o.s > P.s + 1.1 || Math.abs(P.x - o.lane * LANE) > reach || P.y > 1.6 || h < 1.3) continue;
+      o.got = true; if (o.mesh) o.mesh.visible = false; P.shards++; beep(880 + P.shards % 5 * 80, .07, 'sine', .05); fx('hackFx'); addXp(12, 'shard'); if (o.power) grantPower(o.power); } }
   const st = Math.floor(P.s / 200);
   if (st > lastStage) {
     const clean = stageHits === 0; lastStage = st;
@@ -339,21 +420,31 @@ function updRun(dt) {
   if (P.gap <= GAP_MIN && state === 'playing') caught();
 }
 function caught() { if (state !== 'playing') return; state = 'over'; P.gap = Math.min(P.gap, 2); const sc = score(); if (sc > best) { best = sc; try { localStorage.setItem('nhr_best', String(best)); } catch (e) { /* ignore */ } }
-  $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best; show('over', true); setTouch(false); beep(70, .6, 'sawtooth', .07); }
+  $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best;
+  const rec = $('overRecap'); if (rec) rec.textContent = lastNear > 80 ? ('You almost lost them at ' + Math.floor(lastNear) + ' m.') : (lastWhy === 'turn' ? 'The corner is where they caught up.' : 'Two mistakes. That is all they needed.');
+  const fresh = SKINS.filter(s => s.lv > 1 && s.lv <= Math.max(level, meta.maxLv || 1) && (meta.unlocks || []).indexOf(s.id) >= 0);
+  const un = $('overUnlock'); if (un) un.textContent = fresh.length ? ('Unlocked: ' + fresh.map(s => s.name).join(' · ') + '. Wear it on the title screen.') : (level < 2 ? 'Hit level 2 to unlock Volt Magenta.' : '');
+  if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); }
+  setTouch(false); beep(70, .6, 'sawtooth', .07);
+  if (TEST) { show('over', true); show('catch', false); }
+  else { catchT = 1.35; show('catch', true); show('over', false); }
+}
 
 /* ---------- actors, camera, HUD ---------- */
-const V = new THREE.Vector3();
+const V = new THREE.Vector3(), fogTgt = new THREE.Color();
 function placeActors(dt) {
   const p = posAt(P.s, P.x); P.yaw += angDiff(P.yaw, p.th) * (1 - Math.exp(-10 * Math.max(dt, .016)));
   const g = player.g; g.position.set(p.x + P.ox, P.y, p.z + P.oz); g.rotation.y = P.yaw; g.rotation.z = -(P.lane * LANE - P.x) * .06;
-  const sl = P.slide > 0 && !P.jump, wk = state === 'playing' ? 1 : 0; P.walk += dt * (12 + P.speed * .4);
-  H.animate(player, { phase: P.walk, run: wk, air: P.jump || P.queueSlide, slide: sl, stumble: P.stumble > 0, speed01: (P.speed - BASE) / (MAXS - BASE) * .6 + .4, lat: P.lane * LANE - P.x }, dt);
+  g.scale.set(1, squash, 1);
+  const catching = catchT > 0, sl = P.slide > 0 && !P.jump, wk = state === 'playing' ? 1 : 0; P.walk += dt * (12 + P.speed * .4);
+  H.animate(player, { phase: P.walk, run: catching ? 0 : wk, air: P.jump || P.queueSlide, slide: sl, stumble: P.stumble > 0 || catching, catch: catching, speed01: (P.speed - BASE) / (MAXS - BASE) * .6 + .4, lat: P.lane * LANE - P.x }, dt);
   g.visible = P.inv <= 0 || Math.floor(time * 16) % 2 === 0; blob.position.set(g.position.x, .06, g.position.z); blob.rotation.z = P.yaw; blob.scale.setScalar(Math.max(.4, 1 - P.y * .25));
   chasers.forEach((c, i) => {
     const show = i < 3 || level >= 5; c.m.g.visible = show; if (!show) return;
     const q = posAt(P.s - P.gap - c.off, c.lx), m = c.m;
     m.g.position.set(q.x, 0, q.z); m.g.rotation.y = q.th;
-    H.animate(m, { phase: P.walk * .95 + i * 1.3, run: wk, reach: P.gap < 7 ? 1 : 0, speed01: .8 }, dt);
+    if (catching) { const q2 = posAt(P.s - 1.1 - c.off * .15, c.lx * .4); m.g.position.set(q2.x, 0, q2.z); m.g.rotation.y = q2.th; }
+    H.animate(m, { phase: P.walk * .95 + i * 1.3, run: catching ? 0 : wk, reach: P.gap < 7 || catching ? 1 : 0, catch: catching && i === 0, speed01: .8 }, dt);
   });
   if (haze.parent) { haze.position.x = g.position.x; haze.position.z = g.position.z; haze.rotation.y = P.yaw; }
   const px = g.position.x, pz = g.position.z, hx = -Math.sin(P.camYaw), hz = -Math.cos(P.camYaw), rx = Math.cos(P.camYaw), rz = -Math.sin(P.camYaw);
@@ -361,10 +452,12 @@ function placeActors(dt) {
 }
 function updCam(dt) {
   const g = player.g.position; P.camYaw += angDiff(P.camYaw, layout[Math.max(0, Math.floor(P.s / CH))].th) * (1 - Math.exp(-4.5 * dt));
-  const sn = Math.sin(P.camYaw), cs = Math.cos(P.camYaw), bounce = shake > 0 ? 1 : 0;
-  camera.position.set(g.x + sn * 7.4 + rr(-1, 1) * shake * .25 * bounce, 4.3 + P.y * .35 + rr(-1, 1) * shake * .25 * bounce, g.z + cs * 7.4);
+  const sn = Math.sin(P.camYaw), cs = Math.cos(P.camYaw), bounce = shake > 0 ? 1 : 0, kickY = punch * 1.1;
+  camera.position.set(g.x + sn * 7.4 + rr(-1, 1) * shake * .25 * bounce, 4.3 + P.y * .35 + rr(-1, 1) * shake * .25 * bounce + kickY, g.z + cs * 7.4);
   camera.lookAt(g.x - sn * 9, 1.3 + P.y * .4, g.z - cs * 9);
-  const fov = 68 + (P.speed - BASE) / (MAXS - BASE) * 18; if (Math.abs(camera.fov - fov) > .05) { camera.fov = damp(camera.fov, fov, 5, dt); camera.updateProjectionMatrix(); }
+  const dist = districtOf(P.k);
+  scene.fog.color.lerp(fogTgt.setHex(dist.fog), 1 - Math.exp(-2 * dt)); scene.background.copy(scene.fog.color); scene.fog.density += (dist.dens - scene.fog.density) * (1 - Math.exp(-2 * dt));
+  const fov = 68 + (P.speed - BASE) / (MAXS - BASE) * 18 + punch * 14; if (Math.abs(camera.fov - fov) > .05) { camera.fov = damp(camera.fov, fov, 8, dt); camera.updateProjectionMatrix(); }
   sky.position.copy(camera.position); skyline.position.x = camera.position.x; skyline.position.z = camera.position.z;
 }
 const last = {}; const setT = (id, v) => { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } };
@@ -375,21 +468,48 @@ function hud() {
   const need = xpNeed(level); setT('lvlTxt', String(level)); setT('xpNum', xp + ' / ' + need + ' XP'); setW('xpFill', Math.min(100, xp / need * 100));
   const nxt = (lastStage + 1) * 200;
   setT('objTxt', P.s < 80 ? 'Learn the street — jump, slide, switch lanes' : 'Reach ' + nxt + ' m · grab shards · stay clean for a bonus');
+  const bits = []; if (shield) bits.push('SHIELD'); if (magT > 0) bits.push('MAGNET ' + Math.ceil(magT) + 's'); if (hackT > 0) bits.push('HACK ' + Math.ceil(hackT) + 's');
+  setT('powerTxt', bits.join(' · '));
+  setT('districtTxt', districtOf(P.k).name + ' • ENDLESS RUN');
   const hudEl = $('hud'); if (hudEl) hudEl.classList.toggle('alert-hot', P.gap < 6);
   const L = layout[P.k], on = !!(L && L.turn && P.s > (P.k + 1) * CH - TURN_WINDOW && !P.pend), pr = $('prompt');
   pr.classList.toggle('on', on); if (on) setT('prompt', L.turn > 0 ? '◄  TURN LEFT' : 'TURN RIGHT  ►');
 }
 function step(dt) {
-  time += dt; shake = Math.max(0, shake - dt); if (!TEST) { updRain(dt); updSparks(dt); }
+  time += dt; shake = Math.max(0, shake - dt); punch = Math.max(0, punch - dt * 2.4); if (!TEST) { updRain(dt); updSparks(dt); }
   if (state === 'playing') { updRun(dt); }
-  if (state === 'playing' || state === 'title') { placeActors(dt); updCam(dt); }
+  if (catchT > 0) { catchT = Math.max(0, catchT - dt); if (catchT === 0) { show('catch', false); show('over', true); } }
+  if (state === 'playing' || state === 'title' || catchT > 0) { placeActors(dt); updCam(dt); }
   for (let k = Math.max(0, P.k - 1); k <= P.k + 4 && k < layout.length; k++) for (const o of layout[k].shards) if (o.mesh && !o.got) o.mesh.rotation.y += dt * 3;
   if (state === 'playing') hud();
 }
 
 /* ---------- flow & input ---------- */
-function setTouch(on) { show('touch', on); }
-function begin() { for (const id of ['title', 'pause', 'over']) show(id, false); show('hud', true); setTouch(true); resetRun(); state = 'playing'; toast('Run! First gates after a short stretch', 1800); }
+function wantPad() {
+  if (padLive) return false;
+  const mode = settings.touch || 'auto';
+  if (mode === 'swipe') return false;
+  if (mode === 'pad') return true;
+  return !!(window.matchMedia && matchMedia('(pointer: coarse)').matches);
+}
+function setTouch(on) { show('touch', on && wantPad()); }
+function goFs() { const el = document.documentElement; if (!el.requestFullscreen) return; if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen().catch(() => {}); }
+function fillSkinSelect() {
+  const sel = $('optSkin'); if (!sel) return;
+  const have = meta.unlocks || ['cyan']; sel.innerHTML = '';
+  SKINS.forEach(s => {
+    const o = document.createElement('option'); o.value = s.id; o.textContent = s.lv > (meta.maxLv || 1) && have.indexOf(s.id) < 0 ? (s.name + ' — lv ' + s.lv) : s.name;
+    o.disabled = have.indexOf(s.id) < 0; sel.appendChild(o);
+  });
+  sel.value = settings.skin;
+}
+function syncOpts() {
+  const d = $('optDaily'), l = $('optLite'), m = $('optMute'), t = $('optTouch'), mp = $('optMuteP'), lp = $('optLiteP'), mh = $('muteHud');
+  if (d) d.checked = !!settings.daily; if (l) l.checked = !!settings.lite; if (m) m.checked = !!settings.mute;
+  if (t) t.value = settings.touch || 'auto'; if (mp) mp.checked = !!settings.mute; if (lp) lp.checked = !!settings.lite;
+  if (mh) mh.textContent = settings.mute ? '✕♪' : '♪';
+}
+function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); toast(settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch', 1800); }
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
 if (!TEST) {
@@ -420,10 +540,12 @@ if (!TEST) {
     if (adx > ady) press(dx < 0 ? 'left' : 'right'); else press(dy < 0 ? 'jump' : 'slide');
   });
   const padHeld = {};
-  addEventListener('gamepadconnected', () => toast('Controller connected', 1400));
+  addEventListener('gamepadconnected', () => { padLive = true; toast('Controller connected', 1400); if (state === 'playing') setTouch(true); });
+  addEventListener('gamepaddisconnected', () => { padLive = false; if (state === 'playing') setTouch(true); });
   const pollPad = () => {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const g = pads && (pads[0] || pads[1] || pads[2] || pads[3]);
+    if (!!g !== padLive) { padLive = !!g; if (state === 'playing') setTouch(true); }
     if (!g || state !== 'playing') return;
     const hit = (i, act) => { const on = !!(g.buttons[i] && g.buttons[i].pressed); if (on && !padHeld[i]) press(act); padHeld[i] = on; };
     hit(14, 'left'); hit(15, 'right'); hit(12, 'jump'); hit(13, 'slide'); hit(0, 'jump'); hit(1, 'slide');
@@ -438,8 +560,16 @@ if (!TEST) {
   requestAnimationFrame(_loopPad);
 }
 $('startBtn').addEventListener('click', begin); $('resumeBtn').addEventListener('click', resume); ['rs1', 'rs2'].forEach(id => $(id).addEventListener('click', begin));
+const bindChk = (id, key, extra) => { const el = $(id); if (!el) return; el.addEventListener('change', () => { settings[key] = el.checked; saveSet(); syncOpts(); if (extra) extra(); }); };
+bindChk('optDaily', 'daily'); bindChk('optLite', 'lite', applyLite); bindChk('optLiteP', 'lite', applyLite);
+bindChk('optMute', 'mute'); bindChk('optMuteP', 'mute');
+if ($('optTouch')) $('optTouch').addEventListener('change', () => { settings.touch = $('optTouch').value; saveSet(); if (state === 'playing') setTouch(true); });
+if ($('optSkin')) $('optSkin').addEventListener('change', () => { settings.skin = $('optSkin').value; saveSet(); applySkin(); });
+if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute = !settings.mute; saveSet(); syncOpts(); });
+['fsTitle', 'fsHud'].forEach(id => { if ($(id)) $(id).addEventListener('click', goFs); });
 
 /* ---------- init ---------- */
+fillSkinSelect(); syncOpts(); applyLite();
 resetRun(); show('hud', false);
 if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, ensureWindow, setSeed: s => runSeed = s,
   get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
