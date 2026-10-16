@@ -48,6 +48,10 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; margin:0 2px; text-
 .card h2 { margin:6px 0 10px; font-size:34px; letter-spacing:-1px; text-shadow:0 0 18px var(--mg); }
 .card p { color:#c2cde3; font-size:14px; line-height:1.65; margin:0 0 16px; }
 .card .note { font-size:11px; color:var(--mu); margin:14px 0 0; }
+.card .tag { margin:0 0 8px; }
+.nowplaying { font-size:11px !important; letter-spacing:1px; text-transform:uppercase; color:var(--cy) !important; margin:0 0 18px !important; text-shadow:0 0 10px var(--cy); }
+.menu-col { display:flex; flex-direction:column; align-items:stretch; gap:8px; }
+.menu-col button { margin:0; width:100%; }
 .grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; margin:0 0 18px; font-size:12px; color:#d5def0; text-align:left; }
 button { border:0; border-radius:10px; background:var(--cy); color:#062430; padding:12px 22px; font-weight:900; letter-spacing:.5px; cursor:pointer; font-size:14px; margin:4px; }
 button.alt { background:#ffffff1c; color:#fff; border:1px solid #ffffff40; }

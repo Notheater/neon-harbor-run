@@ -62,35 +62,46 @@
 <div id="lvlFx"></div>
 <div id="hackFx"></div>
 
-<div id="title" class="screen"><div class="card panel">
-  <div class="label">Free to play · phone, computer, or controller</div>
+<div id="title" class="screen"><div class="card panel menu-card">
+  <div class="label">Main menu · Tokyo night</div>
   <h2>NEON HARBOR RUN</h2>
-  <p>You stole the Crimson Lotus shards. They are already behind you. Dodge, grab data, level up — two stumbles and they catch you.</p>
-  <div class="grid">
-    <div><b>Phone:</b> on-screen buttons, or swipe</div><div><b>Swipe</b> left/right to change lanes</div>
-    <div><b>Swipe up</b> to jump</div><div><b>Swipe down</b> to slide</div>
-    <div><b>Computer:</b> arrows or WASD</div><div><b>Controller:</b> stick / D-pad, A jump, B slide</div>
-    <div>Low barrier → <b>jump</b></div><div>Overhead gate → <b>slide</b> • Wall → <b>switch lane</b></div>
+  <p class="tag">You stole the Crimson Lotus shards. They are already behind you.</p>
+  <p class="nowplaying" id="nowPlaying">♪ Harbor Night · original theme (not a licensed song)</p>
+  <div id="menuHome" class="menu-col">
+    <button id="startBtn" type="button">PLAY</button>
+    <button type="button" class="alt" id="howBtn">How to play</button>
+    <button type="button" class="alt" id="optBtn">Options</button>
+    <button type="button" class="alt" id="fsTitle">Fullscreen</button>
+    <button type="button" class="alt" id="shareBtn">Share</button>
   </div>
-  <div class="opts">
-    <label><input type="checkbox" id="optDaily"> Daily street (same course as everyone today)</label>
-    <label><input type="checkbox" id="optLite"> Lighter graphics</label>
-    <label><input type="checkbox" id="optMute"> Mute</label>
-    <label>Phone controls
-      <select id="optTouch">
-        <option value="auto">Auto</option>
-        <option value="pad">On-screen buttons</option>
-        <option value="swipe">Swipe only</option>
-      </select>
-    </label>
-    <label>Outfit
-      <select id="optSkin"></select>
-    </label>
+  <div id="menuHow" class="hidden">
+    <div class="grid">
+      <div><b>Phone:</b> on-screen buttons, or swipe</div><div><b>Swipe</b> left/right to change lanes</div>
+      <div><b>Swipe up</b> to jump</div><div><b>Swipe down</b> to slide</div>
+      <div><b>Computer:</b> arrows or WASD</div><div><b>Controller:</b> stick / D-pad, A jump, B slide</div>
+      <div>Low barrier → <b>jump</b></div><div>Overhead gate → <b>slide</b> • Wall → <b>switch lane</b></div>
+    </div>
+    <p class="note">Two stumbles and they catch you. Pause with Esc, P, or the pause button.</p>
+    <button type="button" class="alt" id="howBack">Back</button>
   </div>
-  <button id="startBtn" type="button">PLAY</button>
-  <button type="button" class="alt" id="fsTitle">Fullscreen</button>
-  <button type="button" class="alt" id="shareBtn">Share</button>
-  <p class="note">Works in any modern browser. No account, no download. Pause with Esc, P, or the pause button.</p>
+  <div id="menuOpts" class="hidden">
+    <div class="opts">
+      <label><input type="checkbox" id="optDaily"> Daily street (same course as everyone today)</label>
+      <label><input type="checkbox" id="optLite"> Lighter graphics</label>
+      <label><input type="checkbox" id="optMute"> Mute music &amp; effects</label>
+      <label>Phone controls
+        <select id="optTouch">
+          <option value="auto">Auto</option>
+          <option value="pad">On-screen buttons</option>
+          <option value="swipe">Swipe only</option>
+        </select>
+      </label>
+      <label>Outfit
+        <select id="optSkin"></select>
+      </label>
+    </div>
+    <button type="button" class="alt" id="optBack">Back</button>
+  </div>
 </div></div>
 <div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2>
   <label class="optline"><input type="checkbox" id="optMuteP"> Mute</label>

@@ -331,6 +331,58 @@ try { best = +localStorage.getItem('nhr_best') || 0; } catch (e) { /* storage ma
 const score = () => Math.floor(P.s) + P.shards * 10;
 let ac = null;
 function beep(f, d = .08, type = 'square', v = .04) { if (settings.mute) return; try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch (e) { /* audio optional */ } }
+
+/* Original "Harbor Night" menu theme — generated live, not a copied recording. */
+const music = { started: false, step: 0, next: 0, timer: 0, master: null, delay: null };
+function wantMusic() { return !TEST && !settings.mute && (state === 'title' || state === 'over'); }
+function ensureAc() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { ac = null; } return ac; }
+function setMusicGain() {
+  if (!music.master || !ac) return;
+  const v = wantMusic() ? .09 : 0;
+  music.master.gain.cancelScheduledValues(ac.currentTime);
+  music.master.gain.setTargetAtTime(v, ac.currentTime, .12);
+}
+function startMusic() {
+  if (TEST || music.started) { setMusicGain(); return; }
+  if (!ensureAc()) return;
+  const ctx = ac, master = ctx.createGain(); master.gain.value = 0;
+  const delay = ctx.createDelay(); delay.delayTime.value = .28;
+  const fb = ctx.createGain(); fb.gain.value = .28;
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1800;
+  delay.connect(fb); fb.connect(delay); delay.connect(master);
+  filt.connect(master); master.connect(ctx.destination);
+  music.master = master; music.delay = delay; music.filt = filt; music.started = true; music.step = 0; music.next = ctx.currentTime + .05;
+  const bass = [69.3, 69.3, 92.5, 103.83, 77.78, 77.78, 92.5, 110], arp = [277.18, 329.63, 415.3, 493.88];
+  const tone = (freq, t, dur, type, peak, dest, slide) => {
+    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + .02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .02);
+  };
+  const tick = () => {
+    if (!music.started || !ac) return;
+    const ctx = ac, look = ctx.currentTime + .12;
+    if (music.next < ctx.currentTime - 1) music.next = ctx.currentTime;
+    while (music.next < look) {
+      const t = music.next, i = music.step, beat = i % 8, bar = (i >> 3) % 8;
+      if (beat % 2 === 0) tone(bass[bar], t, .36, 'sawtooth', .11, filt, bass[bar] * .5);
+      tone(arp[(i + bar) % 4], t, .14, 'square', beat % 2 ? .018 : .03, delay);
+      if (beat === 0 || beat === 4) {
+        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(38, t + .12);
+        g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + .18); o.connect(g); g.connect(master); o.start(t); o.stop(t + .2);
+      }
+      if (beat === 4) {
+        const n = ctx.createBufferSource(), buf = ctx.createBuffer(1, 2200, ctx.sampleRate), d = buf.getChannelData(0);
+        for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / d.length);
+        n.buffer = buf; const g = ctx.createGain(), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+        g.gain.setValueAtTime(.045, t); g.gain.exponentialRampToValueAtTime(0.0001, t + .12); n.connect(hp); hp.connect(g); g.connect(master); n.start(t);
+      }
+      music.step++; music.next += 60 / 96 / 2;
+    }
+    setMusicGain();
+  };
+  music.timer = setInterval(tick, 40); tick(); setMusicGain();
+}
 function grantPower(kind) {
   if (kind === 'magnet') { magT = 7.5; toast('MAGNET · shards pull in', 1400); }
   else if (kind === 'shield') { shield = 1; toast('SHIELD · one hit absorbed', 1400); }
@@ -420,7 +472,7 @@ function updRun(dt) {
   }
   if (P.gap <= GAP_MIN && state === 'playing') caught();
 }
-function caught() { if (state !== 'playing') return; state = 'over'; P.gap = Math.min(P.gap, 2); const sc = score(); if (sc > best) { best = sc; try { localStorage.setItem('nhr_best', String(best)); } catch (e) { /* ignore */ } }
+function caught() { if (state !== 'playing') return; state = 'over'; setMusicGain(); P.gap = Math.min(P.gap, 2); const sc = score(); if (sc > best) { best = sc; try { localStorage.setItem('nhr_best', String(best)); } catch (e) { /* ignore */ } }
   $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best;
   const rec = $('overRecap'); if (rec) rec.textContent = lastNear > 80 ? ('You almost lost them at ' + Math.floor(lastNear) + ' m.') : (lastWhy === 'turn' ? 'The corner is where they caught up.' : 'Two mistakes. That is all they needed.');
   const fresh = SKINS.filter(s => s.lv > 1 && s.lv <= Math.max(level, meta.maxLv || 1) && (meta.unlocks || []).indexOf(s.id) >= 0);
@@ -512,11 +564,14 @@ function syncOpts() {
   if (t) t.value = settings.touch || 'auto'; if (mp) mp.checked = !!settings.mute; if (lp) lp.checked = !!settings.lite;
   if (mh) mh.textContent = settings.mute ? '✕♪' : '♪';
 }
-function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); toast(settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch', 1800); }
+function showMenu(which) {
+  show('menuHome', which === 'home'); show('menuHow', which === 'how'); show('menuOpts', which === 'opts');
+}
+function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain(); toast(settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch', 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
-  show('title', true); fillSkinSelect(); syncOpts(); resetRun();
+  show('title', true); showMenu('home'); fillSkinSelect(); syncOpts(); resetRun(); startMusic();
 }
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
@@ -525,6 +580,7 @@ if (!TEST) {
   document.addEventListener('keydown', e => {
     if (MAP[e.code] || e.code === 'Escape') e.preventDefault();
     if (e.code === 'Escape' || e.code === 'KeyP') { if (!e.repeat) { if (state === 'playing') pause(); else if (state === 'paused') resume(); } return; }
+    if (state === 'title' && !e.repeat && (e.code === 'Enter' || e.code === 'Space')) { startMusic(); begin(); return; }
     if (!e.repeat && MAP[e.code]) press(MAP[e.code]);
   });
   const coarse = matchMedia('(pointer: coarse)').matches;
@@ -567,14 +623,19 @@ if (!TEST) {
   const _loopPad = () => { pollPad(); requestAnimationFrame(_loopPad); };
   requestAnimationFrame(_loopPad);
 }
-$('startBtn').addEventListener('click', begin); $('resumeBtn').addEventListener('click', resume); ['rs1', 'rs2'].forEach(id => $(id).addEventListener('click', begin));
+$('startBtn').addEventListener('click', () => { startMusic(); begin(); }); $('resumeBtn').addEventListener('click', resume); ['rs1', 'rs2'].forEach(id => $(id).addEventListener('click', begin));
 if ($('toTitle')) $('toTitle').addEventListener('click', toTitle);
 const bindChk = (id, key, extra) => { const el = $(id); if (!el) return; el.addEventListener('change', () => { settings[key] = el.checked; saveSet(); syncOpts(); if (extra) extra(); }); };
 bindChk('optDaily', 'daily'); bindChk('optLite', 'lite', applyLite); bindChk('optLiteP', 'lite', applyLite);
-bindChk('optMute', 'mute'); bindChk('optMuteP', 'mute');
+bindChk('optMute', 'mute', setMusicGain); bindChk('optMuteP', 'mute', setMusicGain);
 if ($('optTouch')) $('optTouch').addEventListener('change', () => { settings.touch = $('optTouch').value; saveSet(); if (state === 'playing') setTouch(true); });
 if ($('optSkin')) $('optSkin').addEventListener('change', () => { settings.skin = $('optSkin').value; saveSet(); applySkin(); });
-if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute = !settings.mute; saveSet(); syncOpts(); });
+if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute = !settings.mute; saveSet(); syncOpts(); setMusicGain(); });
+if ($('howBtn')) $('howBtn').addEventListener('click', () => showMenu('how'));
+if ($('optBtn')) $('optBtn').addEventListener('click', () => showMenu('opts'));
+if ($('howBack')) $('howBack').addEventListener('click', () => showMenu('home'));
+if ($('optBack')) $('optBack').addEventListener('click', () => showMenu('home'));
+if (!TEST) addEventListener('pointerdown', () => { if (state === 'title' || state === 'over') startMusic(); });
 ['fsTitle', 'fsHud'].forEach(id => { if ($(id)) $(id).addEventListener('click', goFs); });
 const PLAY_URL = 'https://notheater.github.io/neon-harbor-run/';
 if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
