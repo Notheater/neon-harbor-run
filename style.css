@@ -49,7 +49,7 @@ kbd { display:inline-block; min-width:20px; padding:1px 5px; margin:0 2px; text-
 .card p { color:#c2cde3; font-size:14px; line-height:1.65; margin:0 0 16px; }
 .card .note { font-size:11px; color:var(--mu); margin:14px 0 0; }
 .grid { display:grid; grid-template-columns:1fr 1fr; gap:6px 14px; margin:0 0 18px; font-size:12px; color:#d5def0; text-align:left; }
-button { border:0; border-radius:10px; background:var(--cy); color:#062430; padding:12px 22px; font-weight:900; letter-spacing:.5px; cursor:pointer; font-size:14px; }
+button { border:0; border-radius:10px; background:var(--cy); color:#062430; padding:12px 22px; font-weight:900; letter-spacing:.5px; cursor:pointer; font-size:14px; margin:4px; }
 button.alt { background:#ffffff1c; color:#fff; border:1px solid #ffffff40; }
 button:hover { filter:brightness(1.1); }
 #fatal { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:30px; text-align:center; background:#07040f; color:#ff8fa3; font-size:16px; }

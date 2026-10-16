@@ -510,6 +510,11 @@ function syncOpts() {
   if (mh) mh.textContent = settings.mute ? '✕♪' : '♪';
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); toast(settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch', 1800); }
+function toTitle() {
+  catchT = 0; state = 'title'; setTouch(false); show('hud', false);
+  for (const id of ['pause', 'over', 'catch']) show(id, false);
+  show('title', true); fillSkinSelect(); syncOpts(); resetRun();
+}
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
 if (!TEST) {
@@ -560,6 +565,7 @@ if (!TEST) {
   requestAnimationFrame(_loopPad);
 }
 $('startBtn').addEventListener('click', begin); $('resumeBtn').addEventListener('click', resume); ['rs1', 'rs2'].forEach(id => $(id).addEventListener('click', begin));
+if ($('toTitle')) $('toTitle').addEventListener('click', toTitle);
 const bindChk = (id, key, extra) => { const el = $(id); if (!el) return; el.addEventListener('change', () => { settings[key] = el.checked; saveSet(); syncOpts(); if (extra) extra(); }); };
 bindChk('optDaily', 'daily'); bindChk('optLite', 'lite', applyLite); bindChk('optLiteP', 'lite', applyLite);
 bindChk('optMute', 'mute'); bindChk('optMuteP', 'mute');
