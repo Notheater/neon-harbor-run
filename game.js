@@ -49,6 +49,14 @@ function setCoins(n) {
   const b = $('bankTxt'); if (b) b.textContent = coinLabel();
 }
 function ownedSkin(id) { return (meta.unlocks || []).indexOf(id) >= 0; }
+function ownsPerk(id) { return (meta.ownedPerks || []).indexOf(id) >= 0; }
+function grantAllItems() {
+  if (TEST) return;
+  if (!meta.ownedPerks) meta.ownedPerks = [];
+  SKINS.forEach(s => { if (meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); });
+  PERKS.forEach(p => { if (meta.ownedPerks.indexOf(p.id) < 0) meta.ownedPerks.push(p.id); });
+  saveMeta();
+}
 function daySeed() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
 
 /* ---------- utils ---------- */
@@ -692,17 +700,58 @@ function fillStore() {
 }
 function buySkin(id) {
   const s = SKINS.find(x => x.id === id); if (!s) return;
-  if (ownedSkin(id)) { settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(640, .08, 'sine', .04); return; }
+  if (ownedSkin(id)) { settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); fillInventory(); beep(640, .08, 'sine', .04); return; }
   if (coins() < s.cost) { toast('Need ' + s.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
   setCoins(coins() - s.cost); if (meta.unlocks.indexOf(id) < 0) meta.unlocks.push(id); saveMeta();
-  settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(880, .12, 'sine', .05); toast('Bought ' + s.name, 1200);
+  settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); fillInventory(); beep(880, .12, 'sine', .05); toast('Bought ' + s.name, 1200);
+}
+function fillInventory() {
+  const shards = $('invShards'), run = $('invRun'), skins = $('invSkins'), perks = $('invPerks');
+  if (shards) shards.textContent = coinLabel();
+  if (run) run.textContent = (state === 'paused' || state === 'over') ? ('This run: ' + (P.shards | 0) + ' shards') : 'Every outfit and perk is in this bag.';
+  const mk = (label, btn, fn, disable) => {
+    const row = document.createElement('div'); row.className = 'store-row';
+    const t = document.createElement('span'); t.textContent = label;
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = btn;
+    if (disable) b.disabled = true; else b.addEventListener('click', fn);
+    row.appendChild(t); row.appendChild(b); return row;
+  };
+  if (skins) {
+    skins.innerHTML = '';
+    SKINS.forEach(s => {
+      const on = ownedSkin(s.id), eq = settings.skin === s.id && on;
+      skins.appendChild(mk(s.name, eq ? 'Wearing' : on ? 'Wear' : 'Not owned', () => buySkin(s.id), eq || !on));
+    });
+  }
+  if (perks) {
+    perks.innerHTML = '';
+    PERKS.forEach(p => {
+      const armed = !!(meta.loadout && meta.loadout[p.id]), have = ownsPerk(p.id);
+      perks.appendChild(mk(p.name, armed ? 'Ready' : have ? 'Arm' : 'Not owned', () => buyPerk(p.id), armed || !have));
+    });
+  }
+}
+let invFrom = 'title';
+function openInventory() {
+  invFrom = state === 'paused' ? 'pause' : state === 'over' ? 'over' : 'title';
+  fillInventory(); show('inventory', true);
+  if (invFrom === 'title') show('title', false);
+}
+function closeInventory() {
+  show('inventory', false);
+  if (invFrom === 'title') show('title', true);
 }
 function buyPerk(id) {
   const p = PERKS.find(x => x.id === id); if (!p) return;
   if (!meta.loadout) meta.loadout = {};
   if (meta.loadout[id]) { toast('Already set for next run'); return; }
-  if (coins() < p.cost) { toast('Need ' + p.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
-  setCoins(coins() - p.cost); meta.loadout[id] = 1; saveMeta(); fillStore(); beep(760, .1, 'sine', .05); toast(p.name + ' armed', 1200);
+  if (!ownsPerk(id)) {
+    if (coins() < p.cost) { toast('Need ' + p.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
+    setCoins(coins() - p.cost);
+    if (!meta.ownedPerks) meta.ownedPerks = [];
+    meta.ownedPerks.push(id);
+  }
+  meta.loadout[id] = 1; saveMeta(); fillStore(); fillInventory(); beep(760, .1, 'sine', .05); toast(p.name + ' armed', 1200);
 }
 function syncOpts() {
   const d = $('optDaily'), l = $('optLite'), m = $('optMute'), t = $('optTouch'), mp = $('optMuteP'), lp = $('optLiteP'), mh = $('muteHud');
@@ -790,6 +839,10 @@ if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute =
 if ($('howBtn')) $('howBtn').addEventListener('click', () => showMenu('how'));
 if ($('optBtn')) $('optBtn').addEventListener('click', () => showMenu('opts'));
 if ($('storeBtn')) $('storeBtn').addEventListener('click', () => showMenu('store'));
+if ($('invBtn')) $('invBtn').addEventListener('click', openInventory);
+if ($('invBack')) $('invBack').addEventListener('click', closeInventory);
+if ($('pauseInv')) $('pauseInv').addEventListener('click', openInventory);
+if ($('overInv')) $('overInv').addEventListener('click', openInventory);
 if ($('howBack')) $('howBack').addEventListener('click', () => showMenu('home'));
 if ($('optBack')) $('optBack').addEventListener('click', () => showMenu('home'));
 if ($('storeBack')) $('storeBack').addEventListener('click', () => showMenu('home'));
@@ -808,10 +861,10 @@ if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
 });
 
 /* ---------- init ---------- */
-fillSkinSelect(); fillStore(); syncOpts(); applyLite(); musicHint();
+grantAllItems(); fillSkinSelect(); fillStore(); fillInventory(); syncOpts(); applyLite(); musicHint();
 resetRun(true); show('hud', false);
 if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, PATH_HALF, ensureWindow, setSeed: s => runSeed = s,
   setRebound: n => { rebound = n | 0; }, get rebound() { return rebound; }, hold: noteHold,
-  get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
+  get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; }, fillInventory };
 else { const clock = new THREE.Clock(); (function loop() { requestAnimationFrame(loop); step(Math.min(clock.getDelta(), .05)); renderer.render(scene, camera); })(); }
 })();

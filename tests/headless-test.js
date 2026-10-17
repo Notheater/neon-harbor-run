@@ -76,6 +76,14 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(Math.abs(P.x) < 3.2, 'wall jump returns to the street (x ' + P.x.toFixed(2) + ')');
   NH.press('wall'); ok(NH.state === 'playing', 'E/Enter wall jump works again immediately');
 
+  // ---- inventory lists every outfit, perk, and the shard bank
+  NH.fillInventory();
+  ok(dom_('invShards') && dom_('invShards').textContent === '0', 'inventory shows the shard bank');
+  ok(dom_('invSkins') && dom_('invSkins').children.length === 5, 'inventory lists every outfit');
+  ok(dom_('invPerks') && dom_('invPerks').children.length === 4, 'inventory lists every perk');
+  ok(/Harbor Cyan/.test(dom_('invSkins').textContent) && /Wearing/.test(dom_('invSkins').textContent), 'starter outfit is in the bag');
+  ok(/Not owned/.test(dom_('invPerks').textContent), 'test bag does not grant perks');
+
   // ---- stumble consequences & game over
   fresh(); tele(3, 0); addRow(3, 12, 0, 'wall'); addRow(3, 16, 0, 'wall'); const sp0 = P.speed; frames(60);
   ok(NH.log.stumbles.length === 1, 'first wall = one stumble; second wall inside invulnerability ignored (stumbles ' + NH.log.stumbles.length + ')');

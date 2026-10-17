@@ -73,6 +73,7 @@
   <div id="menuHome" class="menu-col">
     <button id="startBtn" type="button">PLAY</button>
     <button type="button" class="alt" id="storeBtn">Store</button>
+    <button type="button" class="alt" id="invBtn">Inventory</button>
     <button type="button" class="alt" id="howBtn">How to play</button>
     <button type="button" class="alt" id="optBtn">Options</button>
     <button type="button" class="alt" id="fsTitle">Fullscreen</button>
@@ -121,6 +122,7 @@
   <label class="optline"><input type="checkbox" id="optMuteP"> Mute</label>
   <label class="optline"><input type="checkbox" id="optLiteP"> Lighter graphics</label>
   <button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button>
+  <button type="button" class="alt" id="pauseInv">INVENTORY</button>
   <button type="button" class="alt" id="pauseStore">STORE</button>
 </div></div>
 <div id="catch" class="screen hidden"><div class="grab"></div><div class="card panel catchcard">
@@ -133,8 +135,22 @@
   <p id="overRecap" class="recap"></p>
   <p id="overUnlock" class="unlock"></p>
   <button id="rs2">RUN AGAIN</button>
+  <button type="button" class="alt" id="overInv">INVENTORY</button>
   <button type="button" class="alt" id="overStore">STORE</button>
   <button type="button" class="alt" id="toTitle">TITLE</button></div></div>
+<div id="inventory" class="screen hidden"><div class="card panel">
+  <div class="label">Bag</div>
+  <h2>INVENTORY</h2>
+  <p class="coinline">Shards <b id="invShards">0</b></p>
+  <p class="note" id="invRun"></p>
+  <div class="inv-scroll">
+    <h3 class="storeh">Outfits</h3>
+    <div id="invSkins"></div>
+    <h3 class="storeh">Perks</h3>
+    <div id="invPerks"></div>
+  </div>
+  <button type="button" class="alt" id="invBack">Back</button>
+</div></div>
 <div id="fatal" class="hidden"></div>
 
 <!-- Three.js r149 is bundled locally: no internet connection or web server needed. -->
