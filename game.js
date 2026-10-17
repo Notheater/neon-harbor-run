@@ -28,7 +28,8 @@ const SKINS = [
 const PERKS = [
   { id: 'shield', name: 'Start with shield', cost: 20 },
   { id: 'magnet', name: 'Start with magnet', cost: 25 },
-  { id: 'hack', name: 'Start with hack', cost: 25 }
+  { id: 'hack', name: 'Start with hack', cost: 25 },
+  { id: 'rebound', name: 'Wall bounce — escape death once', cost: 500 }
 ];
 function readJSON(key, fb) { try { return Object.assign({}, fb, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return Object.assign({}, fb); } }
 const SETD = { touch: 'auto', mute: false, lite: false, daily: false, skin: 'cyan' };
@@ -335,7 +336,7 @@ function freeChunk(k) { const L = layout[k]; if (!L || !L.group) return; scene.r
 function ensureWindow() { const k0 = Math.max(0, P.k - BEHIND), k1 = P.k + AHEAD; ensureLayout(k1); for (let k = k0; k <= k1; k++) if (!layout[k].group) buildChunk(k); for (let k = 0; k < k0; k++) freeChunk(k); }
 
 /* ---------- state ---------- */
-let state = 'title', time = 0, shake = 0, toastT = 0, best = 0, punch = 0, squash = 1, catchT = 0, magT = 0, shield = 0, hackT = 0, lastNear = 0, lastWhy = '', padLive = false;
+let state = 'title', time = 0, shake = 0, toastT = 0, best = 0, punch = 0, squash = 1, catchT = 0, magT = 0, shield = 0, hackT = 0, rebound = 0, lastNear = 0, lastWhy = '', padLive = false;
 const log = { stumbles: [], toasts: [], turns: [] };
 const P = { s: 0, k: 0, x: 0, lane: 0, y: 0, vy: 0, jump: false, slide: 0, queueSlide: false, speed: BASE, inv: 0, stumble: 0, sinceHit: 9, gap: GAP0, yaw: 0, camYaw: 0, pend: 0, ox: 0, oz: 0, shards: 0, walk: 0 };
 try { best = +localStorage.getItem('nhr_best') || 0; } catch (e) { /* storage may be blocked */ }
@@ -440,18 +441,37 @@ function resetRun() {
   for (let k = 0; k < layout.length; k++) freeChunk(k); layout.length = 0; lastCorner = -9;
   if (!TEST) runSeed = settings.daily ? daySeed() : (Date.now() % 100000) + 1;
   Object.assign(P, { s: 0, k: 0, x: 0, lane: 0, y: 0, vy: 0, jump: false, slide: 0, queueSlide: false, speed: BASE, inv: 0, stumble: 0, sinceHit: 9, gap: GAP0, yaw: 0, camYaw: 0, pend: 0, ox: 0, oz: 0, shards: 0, walk: 0 });
-  level = 1; xp = 0; lastStage = 0; stageHits = 0; punch = 0; squash = 1; catchT = 0; magT = 0; shield = 0; hackT = 0; lastNear = 0; lastWhy = '';
+  level = 1; xp = 0; lastStage = 0; stageHits = 0; punch = 0; squash = 1; catchT = 0; magT = 0; shield = 0; hackT = 0; rebound = 0; lastNear = 0; lastWhy = '';
   if (chasers[3]) chasers[3].m.g.visible = false;
   applySkin(); applyLite();
   const lo = meta.loadout || {};
   if (lo.shield) shield = 1;
   if (lo.magnet) magT = 7.5;
   if (lo.hack) { hackT = 6; P.gap = Math.min(GAP0, P.gap + 5); }
-  if (!TEST && (lo.shield || lo.magnet || lo.hack)) { meta.loadout = {}; saveMeta(); }
+  if (lo.rebound) rebound = 1;
+  if (!TEST && (lo.shield || lo.magnet || lo.hack || lo.rebound)) { meta.loadout = {}; saveMeta(); }
   log.stumbles.length = 0; log.turns.length = 0; ensureLayout(AHEAD + 1); ensureWindow(); placeActors(0);
 }
 
 /* ---------- gameplay ---------- */
+const PATH_HALF = 5;                                          // road half-width; |x| past this is a side-rail clip
+function wallBounce(wallX) {
+  if (rebound <= 0 || state !== 'playing') return false;
+  rebound = 0;
+  const wx = wallX == null ? (P.x >= 0 ? PATH_HALF : -PATH_HALF) : wallX;
+  let dir = P.x - wx;
+  if (Math.abs(dir) < .08) dir = P.x >= 0 ? -1 : 1;
+  else dir = Math.sign(dir);
+  let nl = clamp(P.lane + (dir > 0 ? 1 : -1), -1, 1);
+  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(nl + (dir > 0 ? 1 : -1), -1, 1);
+  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(P.lane - (dir > 0 ? 1 : -1), -1, 1);
+  P.lane = nl; P.x = nl * LANE;
+  P.inv = Math.max(P.inv, .55); P.stumble = .22;
+  shake = .28; squash = 1.14; kick(.45);
+  beep(980, .12, 'sine', .06); toast('Wall bounce — back on the street', 1400);
+  fx('bounceFx'); burst(player.g.position.x, 1.2, player.g.position.z);
+  return true;
+}
 function stumble(why) {
   if (P.inv > 0 || state !== 'playing') return;
   lastWhy = why;
@@ -474,7 +494,11 @@ function press(act) {                                         // single entry po
   else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
 }
 function updRun(dt) {
-  P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt; P.x = damp(P.x, P.lane * LANE, 22, dt);
+  P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt;
+  if (Math.abs(P.x) > PATH_HALF - .4) {
+    if (!wallBounce(Math.sign(P.x) * PATH_HALF)) { P.x = clamp(P.x, -(PATH_HALF - .45), PATH_HALF - .45); caught(); return; }
+  }
+  P.x = damp(P.x, P.lane * LANE, 22, dt);
   P.sinceHit += dt; P.inv = Math.max(0, P.inv - dt); P.stumble = Math.max(0, P.stumble - dt); P.slide = Math.max(0, P.slide - dt);
   magT = Math.max(0, magT - dt); hackT = Math.max(0, hackT - dt);
   squash = damp(squash, P.slide > 0 ? .74 : 1, 14, dt);
@@ -494,7 +518,10 @@ function updRun(dt) {
   for (let k = Math.max(0, P.k - 1); k <= P.k + 1; k++) { const L = layout[k]; if (!L) continue;
     for (const o of L.rows) { if (o.hit || o.s < s0 - .85 || o.s > P.s + .85 || Math.abs(P.x - o.lane * LANE) > 1.05) continue;   // swept test: slow frames cannot tunnel through
       const kind = hitKind(o.type), hitIt = kind === 'barrier' ? P.y < .95 : kind === 'gate' ? P.y + h > 1.4 : true;
-      if (hitIt) { o.hit = true; if (o.mesh) o.mesh.visible = false; stumble(o.type); }
+      if (hitIt) {
+        if (kind === 'wall' && wallBounce(o.lane * LANE)) continue;
+        o.hit = true; if (o.mesh) o.mesh.visible = false; stumble(o.type);
+      }
       else if (!o.cleared) { o.cleared = true; lastNear = P.s; kick(.2); beep(980, .05, 'sine', .03); toast(kind === 'gate' || kind === 'truck' ? 'Under!' : 'Close!', 650); } }
     for (const o of L.shards) {
       const reach = magT > 0 ? 4 : 1.3;
@@ -559,7 +586,7 @@ function hud() {
   const need = xpNeed(level); setT('lvlTxt', String(level)); setT('xpNum', xp + ' / ' + need + ' XP'); setW('xpFill', Math.min(100, xp / need * 100));
   const nxt = (lastStage + 1) * 200;
   setT('objTxt', P.s < 80 ? 'Learn the street — jump, slide, switch lanes' : 'Reach ' + nxt + ' m · grab shards · stay clean for a bonus');
-  const bits = []; if (shield) bits.push('SHIELD'); if (magT > 0) bits.push('MAGNET ' + Math.ceil(magT) + 's'); if (hackT > 0) bits.push('HACK ' + Math.ceil(hackT) + 's');
+  const bits = []; if (shield) bits.push('SHIELD'); if (rebound) bits.push('WALL BOUNCE'); if (magT > 0) bits.push('MAGNET ' + Math.ceil(magT) + 's'); if (hackT > 0) bits.push('HACK ' + Math.ceil(hackT) + 's');
   setT('powerTxt', bits.join(' · '));
   setT('districtTxt', districtOf(P.k).name + ' • ENDLESS RUN');
   const hudEl = $('hud'); if (hudEl) hudEl.classList.toggle('alert-hot', P.gap < 6);
@@ -734,7 +761,8 @@ if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
 /* ---------- init ---------- */
 fillSkinSelect(); fillStore(); syncOpts(); applyLite(); musicHint();
 resetRun(); show('hud', false);
-if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, ensureWindow, setSeed: s => runSeed = s,
+if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, PATH_HALF, ensureWindow, setSeed: s => runSeed = s,
+  setRebound: n => { rebound = n | 0; }, get rebound() { return rebound; },
   get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
 else { const clock = new THREE.Clock(); (function loop() { requestAnimationFrame(loop); step(Math.min(clock.getDelta(), .05)); renderer.render(scene, camera); })(); }
 })();

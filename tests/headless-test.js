@@ -40,6 +40,17 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(trial('wall', null) > 0, 'wall: running into it = stumble'); ok(trial('wall', 'jump') > 0, 'wall: cannot be jumped'); ok(!trial('wall', 'left'), 'wall: switching lane avoids it');
   ok(trial('barrier', 'slide') > 0, 'barrier: sliding does not avoid it');
 
+  // ---- wall-bounce perk: one lateral save off a wall, then spent
+  fresh(); NH.setRebound(1); tele(3, 0); addRow(3, 12, 0, 'wall'); P.lane = 0; P.x = 0;
+  frames(90); ok(NH.log.stumbles.length === 0, 'armed rebound: wall clip does not stumble'); ok(NH.state === 'playing', 'armed rebound: run continues');
+  ok(NH.rebound === 0, 'one bounce consumes rebound'); ok(P.lane !== 0, 'bounce kicks to another lane (lane ' + P.lane + ')');
+  P.inv = 0; addRow(P.k, Math.floor(P.s - P.k * NH.CH) + 8, P.lane, 'wall'); frames(80);
+  ok(NH.log.stumbles.length >= 1, 'second wall after rebound spent = stumble');
+  fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; NH.setRebound(1); frames(2);
+  ok(NH.state === 'playing' && Math.abs(P.x) < NH.PATH_HALF - .2, 'rebound saves a path-edge clip (x ' + P.x.toFixed(2) + ')'); ok(NH.rebound === 0, 'edge bounce also spends the perk');
+  fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; frames(2);
+  ok(NH.state === 'over', 'path-edge clip without rebound = caught');
+
   // ---- stumble consequences & game over
   fresh(); tele(3, 0); addRow(3, 12, 0, 'wall'); addRow(3, 16, 0, 'wall'); const sp0 = P.speed; frames(60);
   ok(NH.log.stumbles.length === 1, 'first wall = one stumble; second wall inside invulnerability ignored (stumbles ' + NH.log.stumbles.length + ')');

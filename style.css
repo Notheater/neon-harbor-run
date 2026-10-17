@@ -97,6 +97,10 @@ button:hover { filter:brightness(1.1); }
   background:repeating-linear-gradient(0deg, transparent 0 10px, rgba(33,230,255,.07) 10px 12px); }
 #hackFx.flash { animation:hackFx .35s ease-out; }
 @keyframes hackFx { 0% { opacity:1; } 100% { opacity:0; } }
+#bounceFx { position:fixed; inset:0; pointer-events:none; z-index:3; opacity:0;
+  background:radial-gradient(ellipse at center,rgba(255,209,102,.35) 0%,rgba(100,230,255,.18) 38%,transparent 70%); }
+#bounceFx.flash { animation:bounceFx .28s ease-out; }
+@keyframes bounceFx { 0% { opacity:1; } 100% { opacity:0; } }
 .alert-hot #hpFill { box-shadow:0 0 12px #ff2d55; }
 #touch { position:absolute; left:0; right:0; bottom:12px; display:flex; justify-content:center; align-items:flex-end; gap:10px;
   pointer-events:auto; padding:0 12px calc(8px + env(safe-area-inset-bottom)); z-index:8; }
