@@ -50,6 +50,20 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(NH.state === 'playing' && Math.abs(P.x) < NH.PATH_HALF - .2, 'rebound saves a path-edge clip (x ' + P.x.toFixed(2) + ')'); ok(NH.rebound === 0, 'edge bounce also spends the perk');
   fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; frames(2);
   ok(NH.state === 'over', 'path-edge clip without rebound = caught');
+  // extra TAP at a settled outer lane still clamps; HOLD into that rail is the fail/save
+  fresh(); NH.press('left'); frames(40); NH.press('left'); frames(20);
+  ok(NH.state === 'playing' && P.lane === -1 && Math.abs(P.x + NH.LANE) < .15, 'extra tap at settled left edge still clamps (no rail death)');
+  fresh(); NH.press('left'); frames(40); NH.hold('left', true); frames(50);
+  ok(NH.state === 'over', 'holding into the left rail without rebound = caught');
+  NH.hold('left', false);
+  fresh(); NH.press('left'); frames(40); NH.setRebound(1); frames(1);
+  ok(dom_('perkChip') && !dom_('perkChip').classList.contains('hidden') && /REBOUND/.test(dom_('perkChip').textContent), 'HUD shows Rebound armed');
+  ok(/WALL BOUNCE/.test(dom_('powerTxt').textContent), 'vitals line lists WALL BOUNCE while armed');
+  NH.hold('left', true); frames(50);
+  ok(NH.state === 'playing', 'holding into the rail with Rebound = bounce save'); ok(NH.rebound === 0, 'rail slam spends Rebound');
+  ok(P.lane !== -1 || Math.abs(P.x) < NH.PATH_HALF - .2, 'bounce kicks back onto the street (lane ' + P.lane + ', x ' + P.x.toFixed(2) + ')');
+  ok(dom_('perkChip').classList.contains('hidden'), 'HUD hides Rebound after the save');
+  NH.hold('left', false);
 
   // ---- stumble consequences & game over
   fresh(); tele(3, 0); addRow(3, 12, 0, 'wall'); addRow(3, 16, 0, 'wall'); const sp0 = P.speed; frames(60);

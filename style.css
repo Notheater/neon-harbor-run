@@ -120,6 +120,12 @@ button.tiny { min-width:40px; padding:8px 10px; font-size:16px; background:#ffff
 .opts select { background:#12081c; color:#fff; border:1px solid #ffffff40; border-radius:8px; padding:6px 8px; }
 .optline { justify-content:center; margin:0 0 10px; color:#d5def0; font-size:13px; }
 .powerline { min-height:1.2em; color:#7dffd4 !important; }
+#perkChip { position:absolute; left:50%; top:72px; transform:translateX(-50%); padding:8px 18px; font-size:13px; font-weight:900; letter-spacing:2px; color:#062430;
+  background:linear-gradient(90deg,#64e6ff,#ffd166); border-radius:999px; box-shadow:0 0 20px #64e6ffaa, 0 0 8px #ffd16688; pointer-events:none; z-index:9;
+  animation:perkPulse 1s ease-in-out infinite alternate; }
+#perkChip.hidden { display:none !important; }
+@keyframes perkPulse { from { filter:brightness(1); box-shadow:0 0 16px #64e6ff88; } to { filter:brightness(1.15); box-shadow:0 0 28px #ffd166cc; } }
+@media (max-width:900px) { #perkChip { top:52px; font-size:11px; padding:6px 12px; } }
 .recap { color:#ffd166 !important; font-weight:700; }
 .unlock { color:#6dffb0 !important; }
 .catchcard h2 { color:#ff8fa3; }
