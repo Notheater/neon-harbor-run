@@ -1,4 +1,4 @@
-const CACHE = 'nhr-v12';
+const CACHE = 'nhr-v13';
 const ASSETS = ['./', './index.html', './style.css', './game.js', './human.js', './manifest.json', './favicon.svg', './vendor/three.min.js', './vendor/THREE_LICENSE.txt'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));

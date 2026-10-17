@@ -478,16 +478,22 @@ function noteHold(act, on) {                                  // extra TAP at th
   if (on) { if (P.lane === dir && edgeHold !== dir) { edgeHold = dir; edgeT = 0; } }
   else if (edgeHold === dir) { edgeHold = 0; edgeT = 0; }
 }
-function wallBounce(wallX) {                                 // one rebound: fly into the building on that side, then spring back
-  if (rebound <= 0 || state !== 'playing' || bounce) return false;
-  rebound = 0; edgeHold = 0; edgeT = 0;
-  const side = wallX == null ? (P.x >= 0 ? 1 : -1) : (wallX >= 0 ? 1 : -1);   // manual uses P.x (right if centered); wallX 0 counts as right
-  const face = side * BUILD_FACE;
-  P.lane = side;                                            // land on the street lane beside that face, before the body gets there
-  bounce = { vx: side * 32, face, phase: 'out', age: 0 };
-  if (!P.jump) { P.jump = true; P.vy = 9; P.slide = 0; }
-  P.inv = Math.max(P.inv, .55);
+function launchBuildingBounce(side) {                       // E/Enter any time: fly into that building, then spring back
+  if (state !== 'playing') return false;
+  const face = (side >= 0 ? 1 : -1) * BUILD_FACE;
+  P.lane = face > 0 ? 1 : -1;                               // land on the street lane beside that face
+  edgeHold = 0; edgeT = 0;
+  bounce = { vx: Math.sign(face) * 32, face, phase: 'out', age: 0 };
+  if (!P.jump) { P.jump = true; P.slide = 0; }
+  P.vy = Math.max(P.vy, 9); P.inv = Math.max(P.inv, .55);
+  beep(520, .05, 'triangle', .03);
   return true;
+}
+function wallBounce(wallX) {                                 // perk save: one rebound off a rail or wall obstacle
+  if (rebound <= 0 || state !== 'playing' || bounce) return false;
+  rebound = 0;
+  const side = wallX == null || wallX === 0 ? (P.x >= 0 ? 1 : -1) : Math.sign(wallX);
+  return launchBuildingBounce(side);
 }
 function stepBounce(dt) {
   bounce.age += dt;
@@ -526,10 +532,7 @@ function press(act) {                                         // single entry po
     P.lane = clamp(P.lane + (act === 'left' ? -1 : 1), -1, 1); beep(380, .04, 'triangle', .02);
   } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; squash = 1.16; kick(.18); beep(600, .08, 'sine', .04); } }
   else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
-  else if (act === 'wall') {
-    if (wallBounce()) return;
-    beep(120, .08, 'sawtooth', .03); toast('No wall bounce armed', 1100);
-  }
+  else if (act === 'wall') launchBuildingBounce(P.x >= 0 ? 1 : -1);
 }
 function updRun(dt) {
   P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt;
@@ -764,7 +767,7 @@ function showMenu(which) {
   if (which === 'store') fillStore();
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain();
-  toast(rebound ? 'Wall bounce armed — E or Enter to bounce off a building' : (settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch'), 1800); }
+  toast('E or Enter bounces off a building' + (rebound ? ' · wall bounce armed' : ''), 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
