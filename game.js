@@ -40,8 +40,14 @@ if (meta.coins == null) meta.coins = 0;
 if (!meta.loadout) meta.loadout = {};
 function saveSet() { if (TEST) return; try { localStorage.setItem('nhr_set', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
 function saveMeta() { if (TEST) return; try { localStorage.setItem('nhr_meta', JSON.stringify(meta)); } catch (e) { /* ignore */ } }
-function coins() { return meta.coins | 0; }
-function setCoins(n) { meta.coins = Math.max(0, n | 0); saveMeta(); fillStore(); const b = $('bankTxt'), s = $('storeCoins'); if (b) b.textContent = String(coins()); if (s) s.textContent = String(coins()); }
+const UNLIMITED_BANK = !TEST;
+function coins() { return UNLIMITED_BANK ? Infinity : (meta.coins | 0); }
+function coinLabel() { return UNLIMITED_BANK ? '∞' : String(meta.coins | 0); }
+function setCoins(n) {
+  if (!UNLIMITED_BANK) meta.coins = Math.max(0, n | 0);
+  saveMeta(); fillStore();
+  const b = $('bankTxt'); if (b) b.textContent = coinLabel();
+}
 function ownedSkin(id) { return (meta.unlocks || []).indexOf(id) >= 0; }
 function daySeed() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
 
@@ -550,7 +556,7 @@ function caught() { if (state !== 'playing') return; state = 'over'; setMusicGai
   if (!TEST && P.shards) setCoins(coins() + P.shards);
   $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best;
   const rec = $('overRecap'); if (rec) rec.textContent = lastNear > 80 ? ('You almost lost them at ' + Math.floor(lastNear) + ' m.') : (lastWhy === 'turn' ? 'The corner is where they caught up.' : 'Two mistakes. That is all they needed.');
-  const un = $('overUnlock'); if (un) un.textContent = P.shards ? ('+' + P.shards + ' shards banked · ' + coins() + ' in the store.') : ('No shards that run. Bank is ' + coins() + '.');
+  const un = $('overUnlock'); if (un) un.textContent = P.shards ? ('+' + P.shards + ' shards banked · ' + coinLabel() + ' in the store.') : ('No shards that run. Bank is ' + coinLabel() + '.');
   if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); }
   setTouch(false); beep(70, .6, 'sawtooth', .07);
   if (TEST) { show('over', true); show('catch', false); }
@@ -592,7 +598,7 @@ function updCam(dt) {
 const last = {}; const setT = (id, v) => { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } };
 const setW = (id, v) => { const k = Math.round(v); if (last[id] !== k) { last[id] = k; $(id).style.width = k + '%'; } };
 function hud() {
-  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bankTxt', String(coins())); setT('bestTxt', String(Math.max(best, score())));
+  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bankTxt', coinLabel()); setT('bestTxt', String(Math.max(best, score())));
   setW('hpFill', (P.gap - GAP_MIN) / (GAP0 - GAP_MIN) * 100); setW('stFill', (P.speed - BASE) / (MAXS - BASE) * 100);
   const need = xpNeed(level); setT('lvlTxt', String(level)); setT('xpNum', xp + ' / ' + need + ' XP'); setW('xpFill', Math.min(100, xp / need * 100));
   const nxt = (lastStage + 1) * 200;
@@ -635,7 +641,7 @@ function fillSkinSelect() {
 }
 function fillStore() {
   const box = $('storeSkins'), per = $('storePerks'), sc = $('storeCoins');
-  if (sc) sc.textContent = String(coins());
+  if (sc) sc.textContent = coinLabel();
   const mk = (label, btn, fn) => {
     const row = document.createElement('div'); row.className = 'store-row';
     const t = document.createElement('span'); t.textContent = label;
