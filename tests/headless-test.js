@@ -64,6 +64,10 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(P.lane !== -1 || Math.abs(P.x) < NH.PATH_HALF - .2, 'bounce kicks back onto the street (lane ' + P.lane + ', x ' + P.x.toFixed(2) + ')');
   ok(dom_('perkChip').classList.contains('hidden'), 'HUD hides Rebound after the save');
   NH.hold('left', false);
+  fresh(); NH.setRebound(1); const lane0 = P.lane; NH.press('wall');
+  ok(NH.rebound === 0, 'wall jump spends rebound'); ok(P.lane !== lane0, 'wall jump kicks to another lane (lane ' + P.lane + ')');
+  ok(NH.state === 'playing', 'wall jump keeps the run going');
+  NH.press('wall'); ok(NH.state === 'playing' && NH.rebound === 0, 'wall jump with no rebound does not catch you');
 
   // ---- stumble consequences & game over
   fresh(); tele(3, 0); addRow(3, 12, 0, 'wall'); addRow(3, 16, 0, 'wall'); const sp0 = P.speed; frames(60);

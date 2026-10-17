@@ -506,6 +506,10 @@ function press(act) {                                         // single entry po
     P.lane = clamp(P.lane + (act === 'left' ? -1 : 1), -1, 1); beep(380, .04, 'triangle', .02);
   } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; squash = 1.16; kick(.18); beep(600, .08, 'sine', .04); } }
   else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
+  else if (act === 'wall') {
+    if (wallBounce()) return;
+    beep(120, .08, 'sawtooth', .03); toast('No wall bounce armed', 1100);
+  }
 }
 function updRun(dt) {
   P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt;
@@ -693,7 +697,7 @@ function showMenu(which) {
   if (which === 'store') fillStore();
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain();
-  toast(rebound ? 'Wall bounce armed — hold into a side rail to save one clip' : (settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch'), 1800); }
+  toast(rebound ? 'Wall bounce armed — E or Enter to wall jump' : (settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch'), 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
@@ -702,9 +706,10 @@ function toTitle() {
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
 if (!TEST) {
-  const MAP = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'jump', ArrowUp: 'jump', Space: 'jump', KeyS: 'slide', ArrowDown: 'slide', ShiftLeft: 'slide', ShiftRight: 'slide' };
+  const MAP = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'jump', ArrowUp: 'jump', Space: 'jump', KeyS: 'slide', ArrowDown: 'slide', ShiftLeft: 'slide', ShiftRight: 'slide', KeyE: 'wall', Enter: 'wall', NumpadEnter: 'wall' };
   document.addEventListener('keydown', e => {
-    if (MAP[e.code] || e.code === 'Escape') e.preventDefault();
+    const enter = e.code === 'Enter' || e.code === 'NumpadEnter';
+    if ((MAP[e.code] && !(enter && state !== 'playing')) || e.code === 'Escape') e.preventDefault();
     if (e.code === 'Escape' || e.code === 'KeyP') { if (!e.repeat) { if (state === 'playing') pause(); else if (state === 'paused') resume(); } return; }
     if (state === 'title' && !e.repeat && (e.code === 'Enter' || e.code === 'Space')) { startMusic(); begin(); return; }
     if (MAP[e.code] === 'left' || MAP[e.code] === 'right') noteHold(MAP[e.code], true);
