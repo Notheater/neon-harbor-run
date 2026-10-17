@@ -40,9 +40,23 @@ if (meta.coins == null) meta.coins = 0;
 if (!meta.loadout) meta.loadout = {};
 function saveSet() { if (TEST) return; try { localStorage.setItem('nhr_set', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
 function saveMeta() { if (TEST) return; try { localStorage.setItem('nhr_meta', JSON.stringify(meta)); } catch (e) { /* ignore */ } }
-function coins() { return meta.coins | 0; }
-function setCoins(n) { meta.coins = Math.max(0, n | 0); saveMeta(); fillStore(); const b = $('bankTxt'), s = $('storeCoins'); if (b) b.textContent = String(coins()); if (s) s.textContent = String(coins()); }
+const UNLIMITED_BANK = !TEST;
+function coins() { return UNLIMITED_BANK ? Infinity : (meta.coins | 0); }
+function coinLabel() { return UNLIMITED_BANK ? '∞' : String(meta.coins | 0); }
+function setCoins(n) {
+  if (!UNLIMITED_BANK) meta.coins = Math.max(0, n | 0);
+  saveMeta(); fillStore();
+  const b = $('bankTxt'); if (b) b.textContent = coinLabel();
+}
 function ownedSkin(id) { return (meta.unlocks || []).indexOf(id) >= 0; }
+function ownsPerk(id) { return (meta.ownedPerks || []).indexOf(id) >= 0; }
+function grantAllItems() {
+  if (TEST) return;
+  if (!meta.ownedPerks) meta.ownedPerks = [];
+  SKINS.forEach(s => { if (meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); });
+  PERKS.forEach(p => { if (meta.ownedPerks.indexOf(p.id) < 0) meta.ownedPerks.push(p.id); });
+  saveMeta();
+}
 function daySeed() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
 
 /* ---------- utils ---------- */
@@ -451,34 +465,52 @@ function resetRun(keepLoadout) {
   if (lo.hack) { hackT = 6; P.gap = Math.min(GAP0, P.gap + 5); }
   if (lo.rebound) rebound = 1;
   if (!keepLoadout && !TEST && (lo.shield || lo.magnet || lo.hack || lo.rebound)) { meta.loadout = {}; saveMeta(); }
-  edgeHold = 0; edgeT = 0;
+  edgeHold = 0; edgeT = 0; bounce = null;
   log.stumbles.length = 0; log.turns.length = 0; ensureLayout(AHEAD + 1); ensureWindow(); placeActors(0);
 }
 
 /* ---------- gameplay ---------- */
-const PATH_HALF = 5;                                          // road half-width; |x| past this is a side-rail clip
+const PATH_HALF = 5, BUILD_FACE = 7.5;                        // road edge, then the street-facing building plane
+let bounce = null;
 function noteHold(act, on) {                                  // extra TAP at the edge still clamps; HOLD into that same outer lane slams the rail
   if (act !== 'left' && act !== 'right') return;
   const dir = act === 'left' ? -1 : 1;
   if (on) { if (P.lane === dir && edgeHold !== dir) { edgeHold = dir; edgeT = 0; } }
   else if (edgeHold === dir) { edgeHold = 0; edgeT = 0; }
 }
-function wallBounce(wallX) {
-  if (rebound <= 0 || state !== 'playing') return false;
-  rebound = 0; edgeHold = 0; edgeT = 0;
-  const wx = wallX == null ? (P.x >= 0 ? PATH_HALF : -PATH_HALF) : wallX;
-  let dir = P.x - wx;
-  if (Math.abs(dir) < .08) dir = P.x >= 0 ? -1 : 1;
-  else dir = Math.sign(dir);
-  let nl = clamp(P.lane + (dir > 0 ? 1 : -1), -1, 1);
-  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(nl + (dir > 0 ? 1 : -1), -1, 1);
-  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(P.lane - (dir > 0 ? 1 : -1), -1, 1);
-  P.lane = nl; P.x = nl * LANE;
-  P.inv = Math.max(P.inv, .55); P.stumble = .22;
-  shake = .38; squash = 1.18; kick(.55); flash();
-  beep(980, .12, 'sine', .06); toast('Wall bounce — back on the street', 1400);
-  fx('bounceFx'); burst(player.g.position.x, 1.2, player.g.position.z);
+function launchBuildingBounce(side) {                       // E/Enter any time: fly into that building, then spring back
+  if (state !== 'playing') return false;
+  const face = (side >= 0 ? 1 : -1) * BUILD_FACE;
+  P.lane = face > 0 ? 1 : -1;                               // land on the street lane beside that face
+  edgeHold = 0; edgeT = 0;
+  bounce = { vx: Math.sign(face) * 32, face, phase: 'out', age: 0 };
+  if (!P.jump) { P.jump = true; P.slide = 0; }
+  P.vy = Math.max(P.vy, 9); P.inv = Math.max(P.inv, .55);
+  beep(520, .05, 'triangle', .03);
   return true;
+}
+function wallBounce(wallX) {                                 // perk save: one rebound off a rail or wall obstacle
+  if (rebound <= 0 || state !== 'playing' || bounce) return false;
+  rebound = 0;
+  const side = wallX == null || wallX === 0 ? (P.x >= 0 ? 1 : -1) : Math.sign(wallX);
+  return launchBuildingBounce(side);
+}
+function stepBounce(dt) {
+  bounce.age += dt;
+  if (!P.jump) { P.jump = true; P.vy = 9; P.slide = 0; }    // stay hopped while the rebound is in the air
+  P.x += bounce.vx * dt;
+  const sign = Math.sign(bounce.face) || 1, contact = sign * (BUILD_FACE - .45);
+  if (bounce.phase === 'out' && (sign > 0 ? P.x >= contact : P.x <= contact)) {
+    P.x = contact; bounce.vx = -bounce.vx; bounce.phase = 'back';
+    P.jump = true; P.vy = Math.max(P.vy, 9); P.slide = 0;
+    shake = .38; squash = 1.18; kick(.55); flash();
+    beep(980, .12, 'sine', .06); toast('Wall bounce — back on the street', 1400);
+    fx('bounceFx'); burst(player.g.position.x, 1.2, player.g.position.z);
+  } else if (bounce.phase === 'back') {
+    const home = P.lane * LANE;
+    if ((bounce.vx >= 0 && P.x >= home) || (bounce.vx < 0 && P.x <= home)) { P.x = home; bounce = null; return; }
+  }
+  if (bounce && bounce.age >= 1.4) { P.x = P.lane * LANE; bounce = null; }
 }
 function stumble(why) {
   if (P.inv > 0 || state !== 'playing') return;
@@ -500,16 +532,23 @@ function press(act) {                                         // single entry po
     P.lane = clamp(P.lane + (act === 'left' ? -1 : 1), -1, 1); beep(380, .04, 'triangle', .02);
   } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; squash = 1.16; kick(.18); beep(600, .08, 'sine', .04); } }
   else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
+  else if (act === 'wall') launchBuildingBounce(P.x >= 0 ? 1 : -1);
 }
 function updRun(dt) {
   P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt;
-  if (Math.abs(P.x) > PATH_HALF - .4) {
-    lastWhy = 'rail';
-    if (!wallBounce(Math.sign(P.x) * PATH_HALF)) { P.x = clamp(P.x, -(PATH_HALF - .45), PATH_HALF - .45); caught(); return; }
+  if (bounce) stepBounce(dt);
+  else {
+    if (Math.abs(P.x) > PATH_HALF - .4) {
+      lastWhy = 'rail';
+      if (!wallBounce(Math.sign(P.x) * PATH_HALF)) { P.x = clamp(P.x, -(PATH_HALF - .45), PATH_HALF - .45); caught(); return; }
+    }
+    if (bounce) stepBounce(dt);
+    else {
+      if (!(edgeHold && P.lane === edgeHold)) edgeT = 0; else edgeT += dt;
+      const slam = edgeHold && P.lane === edgeHold && edgeT > .14;
+      P.x = damp(P.x, slam ? edgeHold * PATH_HALF : P.lane * LANE, slam ? 16 : 22, dt);
+    }
   }
-  if (!(edgeHold && P.lane === edgeHold)) edgeT = 0; else edgeT += dt;
-  const slam = edgeHold && P.lane === edgeHold && edgeT > .14;
-  P.x = damp(P.x, slam ? edgeHold * PATH_HALF : P.lane * LANE, slam ? 16 : 22, dt);
   P.sinceHit += dt; P.inv = Math.max(0, P.inv - dt); P.stumble = Math.max(0, P.stumble - dt); P.slide = Math.max(0, P.slide - dt);
   magT = Math.max(0, magT - dt); hackT = Math.max(0, hackT - dt);
   squash = damp(squash, P.slide > 0 ? .74 : 1, 14, dt);
@@ -530,7 +569,7 @@ function updRun(dt) {
     for (const o of L.rows) { if (o.hit || o.s < s0 - .85 || o.s > P.s + .85 || Math.abs(P.x - o.lane * LANE) > 1.05) continue;   // swept test: slow frames cannot tunnel through
       const kind = hitKind(o.type), hitIt = kind === 'barrier' ? P.y < .95 : kind === 'gate' ? P.y + h > 1.4 : true;
       if (hitIt) {
-        if (kind === 'wall' && wallBounce(o.lane * LANE)) continue;
+        if (kind === 'wall' && wallBounce(o.lane * LANE)) { o.hit = true; continue; }
         o.hit = true; if (o.mesh) o.mesh.visible = false; stumble(o.type);
       }
       else if (!o.cleared) { o.cleared = true; lastNear = P.s; kick(.2); beep(980, .05, 'sine', .03); toast(kind === 'gate' || kind === 'truck' ? 'Under!' : 'Close!', 650); } }
@@ -550,7 +589,7 @@ function caught() { if (state !== 'playing') return; state = 'over'; setMusicGai
   if (!TEST && P.shards) setCoins(coins() + P.shards);
   $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best;
   const rec = $('overRecap'); if (rec) rec.textContent = lastNear > 80 ? ('You almost lost them at ' + Math.floor(lastNear) + ' m.') : (lastWhy === 'turn' ? 'The corner is where they caught up.' : 'Two mistakes. That is all they needed.');
-  const un = $('overUnlock'); if (un) un.textContent = P.shards ? ('+' + P.shards + ' shards banked · ' + coins() + ' in the store.') : ('No shards that run. Bank is ' + coins() + '.');
+  const un = $('overUnlock'); if (un) un.textContent = P.shards ? ('+' + P.shards + ' shards banked · ' + coinLabel() + ' in the store.') : ('No shards that run. Bank is ' + coinLabel() + '.');
   if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); }
   setTouch(false); beep(70, .6, 'sawtooth', .07);
   if (TEST) { show('over', true); show('catch', false); }
@@ -563,10 +602,10 @@ function placeActors(dt) {
   const p = posAt(P.s, P.x); P.yaw += angDiff(P.yaw, p.th) * (1 - Math.exp(-10 * Math.max(dt, .016)));
   const catching = catchT > 0, sl = P.slide > 0 && !P.jump, wk = state === 'playing' ? 1 : 0; P.walk += dt * (12 + P.speed * .4);
   const g = player.g; g.position.set(p.x + P.ox, P.y, p.z + P.oz); g.rotation.y = P.yaw + (catching ? Math.sin(time * 18) * .12 : 0);
-  g.rotation.x = catching ? .22 : 0; g.rotation.z = -(P.lane * LANE - P.x) * .06 + (catching ? Math.sin(time * 22) * .18 : 0);
+  g.rotation.x = catching ? .22 : 0; g.rotation.z = -(P.lane * LANE - P.x) * .06 + (catching ? Math.sin(time * 22) * .18 : 0) + (bounce ? -bounce.vx * .012 : 0);
   g.scale.set(catching ? 1.04 : 1, squash * (catching ? .88 : 1), catching ? 1.04 : 1);
   H.animate(player, { phase: P.walk, run: catching ? 0 : wk, air: P.jump || P.queueSlide, slide: sl, stumble: P.stumble > 0 || catching, catch: catching, speed01: (P.speed - BASE) / (MAXS - BASE) * .6 + .4, lat: P.lane * LANE - P.x }, dt);
-  g.visible = P.inv <= 0 || Math.floor(time * 16) % 2 === 0; blob.position.set(g.position.x, .06, g.position.z); blob.rotation.z = P.yaw; blob.scale.setScalar(Math.max(.4, 1 - P.y * .25));
+  g.visible = !!bounce || P.inv <= 0 || Math.floor(time * 16) % 2 === 0; blob.position.set(g.position.x, .06, g.position.z); blob.rotation.z = P.yaw; blob.scale.setScalar(Math.max(.4, 1 - P.y * .25));
   chasers.forEach((c, i) => {
     const show = i < 3 || level >= 5; c.m.g.visible = show; if (!show) return;
     const q = posAt(P.s - P.gap - c.off, c.lx), m = c.m;
@@ -592,7 +631,7 @@ function updCam(dt) {
 const last = {}; const setT = (id, v) => { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } };
 const setW = (id, v) => { const k = Math.round(v); if (last[id] !== k) { last[id] = k; $(id).style.width = k + '%'; } };
 function hud() {
-  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bankTxt', String(coins())); setT('bestTxt', String(Math.max(best, score())));
+  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bankTxt', coinLabel()); setT('bestTxt', String(Math.max(best, score())));
   setW('hpFill', (P.gap - GAP_MIN) / (GAP0 - GAP_MIN) * 100); setW('stFill', (P.speed - BASE) / (MAXS - BASE) * 100);
   const need = xpNeed(level); setT('lvlTxt', String(level)); setT('xpNum', xp + ' / ' + need + ' XP'); setW('xpFill', Math.min(100, xp / need * 100));
   const nxt = (lastStage + 1) * 200;
@@ -635,7 +674,7 @@ function fillSkinSelect() {
 }
 function fillStore() {
   const box = $('storeSkins'), per = $('storePerks'), sc = $('storeCoins');
-  if (sc) sc.textContent = String(coins());
+  if (sc) sc.textContent = coinLabel();
   const mk = (label, btn, fn) => {
     const row = document.createElement('div'); row.className = 'store-row';
     const t = document.createElement('span'); t.textContent = label;
@@ -664,17 +703,58 @@ function fillStore() {
 }
 function buySkin(id) {
   const s = SKINS.find(x => x.id === id); if (!s) return;
-  if (ownedSkin(id)) { settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(640, .08, 'sine', .04); return; }
+  if (ownedSkin(id)) { settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); fillInventory(); beep(640, .08, 'sine', .04); return; }
   if (coins() < s.cost) { toast('Need ' + s.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
   setCoins(coins() - s.cost); if (meta.unlocks.indexOf(id) < 0) meta.unlocks.push(id); saveMeta();
-  settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(880, .12, 'sine', .05); toast('Bought ' + s.name, 1200);
+  settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); fillInventory(); beep(880, .12, 'sine', .05); toast('Bought ' + s.name, 1200);
+}
+function fillInventory() {
+  const shards = $('invShards'), run = $('invRun'), skins = $('invSkins'), perks = $('invPerks');
+  if (shards) shards.textContent = coinLabel();
+  if (run) run.textContent = (state === 'paused' || state === 'over') ? ('This run: ' + (P.shards | 0) + ' shards') : 'Every outfit and perk is in this bag.';
+  const mk = (label, btn, fn, disable) => {
+    const row = document.createElement('div'); row.className = 'store-row';
+    const t = document.createElement('span'); t.textContent = label;
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = btn;
+    if (disable) b.disabled = true; else b.addEventListener('click', fn);
+    row.appendChild(t); row.appendChild(b); return row;
+  };
+  if (skins) {
+    skins.innerHTML = '';
+    SKINS.forEach(s => {
+      const on = ownedSkin(s.id), eq = settings.skin === s.id && on;
+      skins.appendChild(mk(s.name, eq ? 'Wearing' : on ? 'Wear' : 'Not owned', () => buySkin(s.id), eq || !on));
+    });
+  }
+  if (perks) {
+    perks.innerHTML = '';
+    PERKS.forEach(p => {
+      const armed = !!(meta.loadout && meta.loadout[p.id]), have = ownsPerk(p.id);
+      perks.appendChild(mk(p.name, armed ? 'Ready' : have ? 'Arm' : 'Not owned', () => buyPerk(p.id), armed || !have));
+    });
+  }
+}
+let invFrom = 'title';
+function openInventory() {
+  invFrom = state === 'paused' ? 'pause' : state === 'over' ? 'over' : 'title';
+  fillInventory(); show('inventory', true);
+  if (invFrom === 'title') show('title', false);
+}
+function closeInventory() {
+  show('inventory', false);
+  if (invFrom === 'title') show('title', true);
 }
 function buyPerk(id) {
   const p = PERKS.find(x => x.id === id); if (!p) return;
   if (!meta.loadout) meta.loadout = {};
   if (meta.loadout[id]) { toast('Already set for next run'); return; }
-  if (coins() < p.cost) { toast('Need ' + p.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
-  setCoins(coins() - p.cost); meta.loadout[id] = 1; saveMeta(); fillStore(); beep(760, .1, 'sine', .05); toast(p.name + ' armed', 1200);
+  if (!ownsPerk(id)) {
+    if (coins() < p.cost) { toast('Need ' + p.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
+    setCoins(coins() - p.cost);
+    if (!meta.ownedPerks) meta.ownedPerks = [];
+    meta.ownedPerks.push(id);
+  }
+  meta.loadout[id] = 1; saveMeta(); fillStore(); fillInventory(); beep(760, .1, 'sine', .05); toast(p.name + ' armed', 1200);
 }
 function syncOpts() {
   const d = $('optDaily'), l = $('optLite'), m = $('optMute'), t = $('optTouch'), mp = $('optMuteP'), lp = $('optLiteP'), mh = $('muteHud');
@@ -687,7 +767,7 @@ function showMenu(which) {
   if (which === 'store') fillStore();
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain();
-  toast(rebound ? 'Wall bounce armed — hold into a side rail to save one clip' : (settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch'), 1800); }
+  toast('E or Enter bounces off a building' + (rebound ? ' · wall bounce armed' : ''), 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
@@ -696,9 +776,10 @@ function toTitle() {
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
 if (!TEST) {
-  const MAP = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'jump', ArrowUp: 'jump', Space: 'jump', KeyS: 'slide', ArrowDown: 'slide', ShiftLeft: 'slide', ShiftRight: 'slide' };
+  const MAP = { KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right', KeyW: 'jump', ArrowUp: 'jump', Space: 'jump', KeyS: 'slide', ArrowDown: 'slide', ShiftLeft: 'slide', ShiftRight: 'slide', KeyE: 'wall', Enter: 'wall', NumpadEnter: 'wall' };
   document.addEventListener('keydown', e => {
-    if (MAP[e.code] || e.code === 'Escape') e.preventDefault();
+    const enter = e.code === 'Enter' || e.code === 'NumpadEnter';
+    if ((MAP[e.code] && !(enter && state !== 'playing')) || e.code === 'Escape') e.preventDefault();
     if (e.code === 'Escape' || e.code === 'KeyP') { if (!e.repeat) { if (state === 'playing') pause(); else if (state === 'paused') resume(); } return; }
     if (state === 'title' && !e.repeat && (e.code === 'Enter' || e.code === 'Space')) { startMusic(); begin(); return; }
     if (MAP[e.code] === 'left' || MAP[e.code] === 'right') noteHold(MAP[e.code], true);
@@ -761,6 +842,10 @@ if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute =
 if ($('howBtn')) $('howBtn').addEventListener('click', () => showMenu('how'));
 if ($('optBtn')) $('optBtn').addEventListener('click', () => showMenu('opts'));
 if ($('storeBtn')) $('storeBtn').addEventListener('click', () => showMenu('store'));
+if ($('invBtn')) $('invBtn').addEventListener('click', openInventory);
+if ($('invBack')) $('invBack').addEventListener('click', closeInventory);
+if ($('pauseInv')) $('pauseInv').addEventListener('click', openInventory);
+if ($('overInv')) $('overInv').addEventListener('click', openInventory);
 if ($('howBack')) $('howBack').addEventListener('click', () => showMenu('home'));
 if ($('optBack')) $('optBack').addEventListener('click', () => showMenu('home'));
 if ($('storeBack')) $('storeBack').addEventListener('click', () => showMenu('home'));
@@ -779,10 +864,10 @@ if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
 });
 
 /* ---------- init ---------- */
-fillSkinSelect(); fillStore(); syncOpts(); applyLite(); musicHint();
+grantAllItems(); fillSkinSelect(); fillStore(); fillInventory(); syncOpts(); applyLite(); musicHint();
 resetRun(true); show('hud', false);
 if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, PATH_HALF, ensureWindow, setSeed: s => runSeed = s,
   setRebound: n => { rebound = n | 0; }, get rebound() { return rebound; }, hold: noteHold,
-  get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
+  get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; }, fillInventory };
 else { const clock = new THREE.Clock(); (function loop() { requestAnimationFrame(loop); step(Math.min(clock.getDelta(), .05)); renderer.render(scene, camera); })(); }
 })();
