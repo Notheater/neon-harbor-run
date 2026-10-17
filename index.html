@@ -25,7 +25,7 @@
   <div id="score" class="panel">
     <div class="label">Score</div><div id="scoreTxt" class="big">0</div>
     <div class="row">Distance <b id="distTxt">0 m</b> &nbsp; Shards <b id="shardsTxt">0</b></div>
-    <div class="row">Best <b id="bestTxt">0</b></div>
+    <div class="row">Bank <b id="bankTxt">0</b> &nbsp; Best <b id="bestTxt">0</b></div>
   </div>
   <div id="vitals" class="panel">
     <div class="label">Gang distance</div><div class="track"><div id="hpFill" class="fill hp"></div></div>
@@ -69,6 +69,7 @@
   <p class="nowplaying" id="nowPlaying">♪ Tap anywhere for Harbor Night</p>
   <div id="menuHome" class="menu-col">
     <button id="startBtn" type="button">PLAY</button>
+    <button type="button" class="alt" id="storeBtn">Store</button>
     <button type="button" class="alt" id="howBtn">How to play</button>
     <button type="button" class="alt" id="optBtn">Options</button>
     <button type="button" class="alt" id="fsTitle">Fullscreen</button>
@@ -102,11 +103,21 @@
     </div>
     <button type="button" class="alt" id="optBack">Back</button>
   </div>
+  <div id="menuStore" class="hidden">
+    <p class="coinline">Shard bank <b id="storeCoins">0</b></p>
+    <p class="note">Pick up shards in a run. They bank when you get caught. Spend them here.</p>
+    <h3 class="storeh">Outfits</h3>
+    <div id="storeSkins"></div>
+    <h3 class="storeh">Next run</h3>
+    <div id="storePerks"></div>
+    <button type="button" class="alt" id="storeBack">Back</button>
+  </div>
 </div></div>
 <div id="pause" class="screen hidden"><div class="card panel"><h2>PAUSED</h2>
   <label class="optline"><input type="checkbox" id="optMuteP"> Mute</label>
   <label class="optline"><input type="checkbox" id="optLiteP"> Lighter graphics</label>
   <button id="resumeBtn">RESUME</button> <button id="rs1" class="alt">RESTART</button>
+  <button type="button" class="alt" id="pauseStore">STORE</button>
 </div></div>
 <div id="catch" class="screen hidden"><div class="grab"></div><div class="card panel catchcard">
   <div class="label bad">Hands on your jacket</div><h2>THEY GOT YOU</h2>
@@ -118,6 +129,7 @@
   <p id="overRecap" class="recap"></p>
   <p id="overUnlock" class="unlock"></p>
   <button id="rs2">RUN AGAIN</button>
+  <button type="button" class="alt" id="overStore">STORE</button>
   <button type="button" class="alt" id="toTitle">TITLE</button></div></div>
 <div id="fatal" class="hidden"></div>
 

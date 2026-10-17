@@ -129,3 +129,8 @@ body.lite #touch { opacity:.9; }
 @media (max-width:900px) {
   #hudBtns { top:8px; right:8px; left:auto; transform:none; }
 }
+.coinline { color:var(--cy) !important; font-weight:800; margin:0 0 8px !important; }
+.storeh { margin:12px 0 6px; font-size:12px; letter-spacing:2px; color:var(--mu); text-align:left; text-transform:uppercase; }
+.store-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin:6px 0; font-size:13px; color:#e8eef8; text-align:left; }
+.store-row button { margin:0; padding:8px 12px; font-size:12px; min-width:92px; }
+#menuStore { max-height:58vh; overflow:auto; padding-right:4px; }

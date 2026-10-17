@@ -19,18 +19,29 @@ const TURN_WINDOW = 28, INV = 1.15;
 let level = 1, xp = 0, lastStage = 0, stageHits = 0, xpPopT = 0;
 const xpNeed = lv => Math.round(220 * Math.pow(1.4, lv - 1));
 const SKINS = [
-  { id: 'cyan', name: 'Harbor Cyan', lv: 1, jacket: 0x14b8e0, trim: 0x64e6ff, sole: 0xff3df2, tip: 0xff3df2 },
-  { id: 'volt', name: 'Volt Magenta', lv: 2, jacket: 0x5b1ad6, trim: 0xff3df2, sole: 0x64e6ff, tip: 0xffd166 },
-  { id: 'gold', name: 'Night Gold', lv: 3, jacket: 0x2a220e, trim: 0xffd166, sole: 0xffc078, tip: 0xffd166 },
-  { id: 'ion', name: 'Ion White', lv: 4, jacket: 0xdde8f4, trim: 0x64e6ff, sole: 0x9b6bff, tip: 0xffffff },
-  { id: 'lotus', name: 'Lotus Red', lv: 5, jacket: 0x1a080c, trim: 0xff2a3c, sole: 0xff2a3c, tip: 0xff2a3c }
+  { id: 'cyan', name: 'Harbor Cyan', lv: 1, cost: 0, jacket: 0x14b8e0, trim: 0x64e6ff, sole: 0xff3df2, tip: 0xff3df2 },
+  { id: 'volt', name: 'Volt Magenta', lv: 2, cost: 35, jacket: 0x5b1ad6, trim: 0xff3df2, sole: 0x64e6ff, tip: 0xffd166 },
+  { id: 'gold', name: 'Night Gold', lv: 3, cost: 70, jacket: 0x2a220e, trim: 0xffd166, sole: 0xffc078, tip: 0xffd166 },
+  { id: 'ion', name: 'Ion White', lv: 4, cost: 110, jacket: 0xdde8f4, trim: 0x64e6ff, sole: 0x9b6bff, tip: 0xffffff },
+  { id: 'lotus', name: 'Lotus Red', lv: 5, cost: 150, jacket: 0x1a080c, trim: 0xff2a3c, sole: 0xff2a3c, tip: 0xff2a3c }
+];
+const PERKS = [
+  { id: 'shield', name: 'Start with shield', cost: 20 },
+  { id: 'magnet', name: 'Start with magnet', cost: 25 },
+  { id: 'hack', name: 'Start with hack', cost: 25 }
 ];
 function readJSON(key, fb) { try { return Object.assign({}, fb, JSON.parse(localStorage.getItem(key) || '{}')); } catch (e) { return Object.assign({}, fb); } }
 const SETD = { touch: 'auto', mute: false, lite: false, daily: false, skin: 'cyan' };
 let settings = TEST ? Object.assign({}, SETD) : readJSON('nhr_set', SETD);
-let meta = TEST ? { maxLv: 1, unlocks: ['cyan'] } : readJSON('nhr_meta', { maxLv: 1, unlocks: ['cyan'] });
+let meta = TEST ? { maxLv: 1, unlocks: ['cyan'], coins: 0, loadout: {} } : readJSON('nhr_meta', { maxLv: 1, unlocks: ['cyan'], coins: 0, loadout: {} });
+if (!meta.unlocks) meta.unlocks = ['cyan'];
+if (meta.coins == null) meta.coins = 0;
+if (!meta.loadout) meta.loadout = {};
 function saveSet() { if (TEST) return; try { localStorage.setItem('nhr_set', JSON.stringify(settings)); } catch (e) { /* ignore */ } }
 function saveMeta() { if (TEST) return; try { localStorage.setItem('nhr_meta', JSON.stringify(meta)); } catch (e) { /* ignore */ } }
+function coins() { return meta.coins | 0; }
+function setCoins(n) { meta.coins = Math.max(0, n | 0); saveMeta(); fillStore(); const b = $('bankTxt'), s = $('storeCoins'); if (b) b.textContent = String(coins()); if (s) s.textContent = String(coins()); }
+function ownedSkin(id) { return (meta.unlocks || []).indexOf(id) >= 0; }
 function daySeed() { const d = new Date(); return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate(); }
 
 /* ---------- utils ---------- */
@@ -432,6 +443,11 @@ function resetRun() {
   level = 1; xp = 0; lastStage = 0; stageHits = 0; punch = 0; squash = 1; catchT = 0; magT = 0; shield = 0; hackT = 0; lastNear = 0; lastWhy = '';
   if (chasers[3]) chasers[3].m.g.visible = false;
   applySkin(); applyLite();
+  const lo = meta.loadout || {};
+  if (lo.shield) shield = 1;
+  if (lo.magnet) magT = 7.5;
+  if (lo.hack) { hackT = 6; P.gap = Math.min(GAP0, P.gap + 5); }
+  if (!TEST && (lo.shield || lo.magnet || lo.hack)) { meta.loadout = {}; saveMeta(); }
   log.stumbles.length = 0; log.turns.length = 0; ensureLayout(AHEAD + 1); ensureWindow(); placeActors(0);
 }
 
@@ -493,10 +509,10 @@ function updRun(dt) {
   if (P.gap <= GAP_MIN && state === 'playing') caught();
 }
 function caught() { if (state !== 'playing') return; state = 'over'; setMusicGain(); P.gap = Math.min(P.gap, 2); const sc = score(); if (sc > best) { best = sc; try { localStorage.setItem('nhr_best', String(best)); } catch (e) { /* ignore */ } }
+  if (!TEST && P.shards) setCoins(coins() + P.shards);
   $('overStats').textContent = 'Score ' + sc + ' • Lv ' + level + ' • Distance ' + Math.floor(P.s) + ' m • Shards ' + P.shards + ' • Best ' + best;
   const rec = $('overRecap'); if (rec) rec.textContent = lastNear > 80 ? ('You almost lost them at ' + Math.floor(lastNear) + ' m.') : (lastWhy === 'turn' ? 'The corner is where they caught up.' : 'Two mistakes. That is all they needed.');
-  const fresh = SKINS.filter(s => s.lv > 1 && s.lv <= Math.max(level, meta.maxLv || 1) && (meta.unlocks || []).indexOf(s.id) >= 0);
-  const un = $('overUnlock'); if (un) un.textContent = fresh.length ? ('Unlocked: ' + fresh.map(s => s.name).join(' · ') + '. Wear it on the title screen.') : (level < 2 ? 'Hit level 2 to unlock Volt Magenta.' : '');
+  const un = $('overUnlock'); if (un) un.textContent = P.shards ? ('+' + P.shards + ' shards banked · ' + coins() + ' in the store.') : ('No shards that run. Bank is ' + coins() + '.');
   if (level > (meta.maxLv || 1)) { meta.maxLv = level; SKINS.forEach(s => { if (s.lv <= level && meta.unlocks.indexOf(s.id) < 0) meta.unlocks.push(s.id); }); saveMeta(); }
   setTouch(false); beep(70, .6, 'sawtooth', .07);
   if (TEST) { show('over', true); show('catch', false); }
@@ -538,7 +554,7 @@ function updCam(dt) {
 const last = {}; const setT = (id, v) => { if (last[id] !== v) { last[id] = v; $(id).textContent = v; } };
 const setW = (id, v) => { const k = Math.round(v); if (last[id] !== k) { last[id] = k; $(id).style.width = k + '%'; } };
 function hud() {
-  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bestTxt', String(Math.max(best, score())));
+  setT('scoreTxt', String(score())); setT('distTxt', Math.floor(P.s) + ' m'); setT('shardsTxt', String(P.shards)); setT('bankTxt', String(coins())); setT('bestTxt', String(Math.max(best, score())));
   setW('hpFill', (P.gap - GAP_MIN) / (GAP0 - GAP_MIN) * 100); setW('stFill', (P.speed - BASE) / (MAXS - BASE) * 100);
   const need = xpNeed(level); setT('lvlTxt', String(level)); setT('xpNum', xp + ' / ' + need + ' XP'); setW('xpFill', Math.min(100, xp / need * 100));
   const nxt = (lastStage + 1) * 200;
@@ -573,10 +589,53 @@ function fillSkinSelect() {
   const sel = $('optSkin'); if (!sel) return;
   const have = meta.unlocks || ['cyan']; sel.innerHTML = '';
   SKINS.forEach(s => {
-    const o = document.createElement('option'); o.value = s.id; o.textContent = s.lv > (meta.maxLv || 1) && have.indexOf(s.id) < 0 ? (s.name + ' — lv ' + s.lv) : s.name;
-    o.disabled = have.indexOf(s.id) < 0; sel.appendChild(o);
+    const o = document.createElement('option'); o.value = s.id; o.textContent = ownedSkin(s.id) ? s.name : (s.name + ' — ' + s.cost + ' shards');
+    o.disabled = !ownedSkin(s.id); sel.appendChild(o);
   });
   sel.value = settings.skin;
+}
+function fillStore() {
+  const box = $('storeSkins'), per = $('storePerks'), sc = $('storeCoins');
+  if (sc) sc.textContent = String(coins());
+  const mk = (label, btn, fn) => {
+    const row = document.createElement('div'); row.className = 'store-row';
+    const t = document.createElement('span'); t.textContent = label;
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = btn;
+    b.addEventListener('click', fn); row.appendChild(t); row.appendChild(b); return row;
+  };
+  if (box) {
+    box.innerHTML = '';
+    SKINS.forEach(s => {
+      const on = ownedSkin(s.id), eq = settings.skin === s.id;
+      const btn = eq ? 'Wearing' : on ? 'Wear' : (s.cost ? s.cost + ' shards' : 'Free');
+      const row = mk(s.name, btn, () => buySkin(s.id));
+      if (eq) row.querySelector('button').disabled = true;
+      box.appendChild(row);
+    });
+  }
+  if (per) {
+    per.innerHTML = '';
+    PERKS.forEach(p => {
+      const armed = !!(meta.loadout && meta.loadout[p.id]);
+      const row = mk(p.name, armed ? 'Ready' : p.cost + ' shards', () => buyPerk(p.id));
+      if (armed) row.querySelector('button').disabled = true;
+      per.appendChild(row);
+    });
+  }
+}
+function buySkin(id) {
+  const s = SKINS.find(x => x.id === id); if (!s) return;
+  if (ownedSkin(id)) { settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(640, .08, 'sine', .04); return; }
+  if (coins() < s.cost) { toast('Need ' + s.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
+  setCoins(coins() - s.cost); if (meta.unlocks.indexOf(id) < 0) meta.unlocks.push(id); saveMeta();
+  settings.skin = id; saveSet(); applySkin(); fillSkinSelect(); fillStore(); beep(880, .12, 'sine', .05); toast('Bought ' + s.name, 1200);
+}
+function buyPerk(id) {
+  const p = PERKS.find(x => x.id === id); if (!p) return;
+  if (!meta.loadout) meta.loadout = {};
+  if (meta.loadout[id]) { toast('Already set for next run'); return; }
+  if (coins() < p.cost) { toast('Need ' + p.cost + ' shards'); beep(120, .1, 'sawtooth', .04); return; }
+  setCoins(coins() - p.cost); meta.loadout[id] = 1; saveMeta(); fillStore(); beep(760, .1, 'sine', .05); toast(p.name + ' armed', 1200);
 }
 function syncOpts() {
   const d = $('optDaily'), l = $('optLite'), m = $('optMute'), t = $('optTouch'), mp = $('optMuteP'), lp = $('optLiteP'), mh = $('muteHud');
@@ -585,13 +644,14 @@ function syncOpts() {
   if (mh) mh.textContent = settings.mute ? '✕♪' : '♪';
 }
 function showMenu(which) {
-  show('menuHome', which === 'home'); show('menuHow', which === 'how'); show('menuOpts', which === 'opts');
+  show('menuHome', which === 'home'); show('menuHow', which === 'how'); show('menuOpts', which === 'opts'); show('menuStore', which === 'store');
+  if (which === 'store') fillStore();
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain(); toast(settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch', 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
-  show('title', true); showMenu('home'); fillSkinSelect(); syncOpts(); resetRun(); startMusic();
+  show('title', true); showMenu('home'); fillSkinSelect(); fillStore(); syncOpts(); resetRun(); startMusic();
 }
 function pause() { if (state === 'playing') { state = 'paused'; show('pause', true); setTouch(false); } }
 function resume() { if (state === 'paused') { show('pause', false); setTouch(true); state = 'playing'; } }
@@ -653,8 +713,13 @@ if ($('optSkin')) $('optSkin').addEventListener('change', () => { settings.skin 
 if ($('muteHud')) $('muteHud').addEventListener('click', () => { settings.mute = !settings.mute; saveSet(); syncOpts(); setMusicGain(); });
 if ($('howBtn')) $('howBtn').addEventListener('click', () => showMenu('how'));
 if ($('optBtn')) $('optBtn').addEventListener('click', () => showMenu('opts'));
+if ($('storeBtn')) $('storeBtn').addEventListener('click', () => showMenu('store'));
 if ($('howBack')) $('howBack').addEventListener('click', () => showMenu('home'));
 if ($('optBack')) $('optBack').addEventListener('click', () => showMenu('home'));
+if ($('storeBack')) $('storeBack').addEventListener('click', () => showMenu('home'));
+function openStoreFromRun() { toTitle(); showMenu('store'); }
+if ($('overStore')) $('overStore').addEventListener('click', openStoreFromRun);
+if ($('pauseStore')) $('pauseStore').addEventListener('click', openStoreFromRun);
 if (!TEST) addEventListener('pointerdown', () => { if (state === 'title' || state === 'over') startMusic(); });
 ['fsTitle', 'fsHud'].forEach(id => { if ($(id)) $(id).addEventListener('click', goFs); });
 const PLAY_URL = 'https://notheater.github.io/neon-harbor-run/';
@@ -667,7 +732,7 @@ if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
 });
 
 /* ---------- init ---------- */
-fillSkinSelect(); syncOpts(); applyLite(); musicHint();
+fillSkinSelect(); fillStore(); syncOpts(); applyLite(); musicHint();
 resetRun(); show('hud', false);
 if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, ensureWindow, setSeed: s => runSeed = s,
   get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
