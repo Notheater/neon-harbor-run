@@ -332,56 +332,76 @@ const score = () => Math.floor(P.s) + P.shards * 10;
 let ac = null;
 function beep(f, d = .08, type = 'square', v = .04) { if (settings.mute) return; try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.value = f; g.gain.value = v; o.connect(g); g.connect(ac.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d); o.stop(ac.currentTime + d); } catch (e) { /* audio optional */ } }
 
-/* Original "Harbor Night" menu theme — generated live, not a copied recording. */
-const music = { started: false, step: 0, next: 0, timer: 0, master: null, delay: null };
-function wantMusic() { return !TEST && !settings.mute && (state === 'title' || state === 'over'); }
-function ensureAc() { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch (e) { ac = null; } return ac; }
+/* Original "Harbor Night" — baked once, then looped. Not a copied recording. */
+const music = { started: false, baking: false, src: null, master: null, buf: null };
+function wantMusic() { return !TEST && !settings.mute && (state === 'title' || state === 'over' || state === 'paused'); }
+function musicHint() {
+  const el = $('nowPlaying'); if (!el) return;
+  if (settings.mute) el.textContent = '♪ Muted · unmute in Options';
+  else if (music.started) el.textContent = '♪ Harbor Night · original theme';
+  else el.textContent = '♪ Tap anywhere for Harbor Night';
+}
+function ensureAc() {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+  } catch (e) { ac = null; }
+  return ac;
+}
 function setMusicGain() {
   if (!music.master || !ac) return;
-  const v = wantMusic() ? .09 : 0;
-  music.master.gain.cancelScheduledValues(ac.currentTime);
-  music.master.gain.setTargetAtTime(v, ac.currentTime, .12);
+  const v = wantMusic() ? .22 : 0;
+  try {
+    music.master.gain.cancelScheduledValues(ac.currentTime);
+    music.master.gain.setTargetAtTime(v, ac.currentTime, .08);
+  } catch (e) { music.master.gain.value = v; }
+  musicHint();
+}
+function bakeTheme(ctx) {
+  const sr = ctx.sampleRate, bpm = 96, step = 60 / bpm / 2, bars = 4, dur = bars * 8 * step;
+  const n = Math.ceil(sr * dur), data = new Float32Array(n);
+  const bass = [69.3, 69.3, 92.5, 103.83, 82.41, 82.41, 92.5, 110], arp = [277.18, 329.63, 415.3, 369.99];
+  const env = (t, a, d) => t <= 0 ? 0 : t < a ? t / a : Math.max(0, 1 - (t - a) / d);
+  for (let i = 0; i < 32; i++) {
+    const t0 = i * step, beat = i % 8, bar = (i >> 3) % 8;
+    for (let s = Math.floor(t0 * sr), e = Math.min(n, s + Math.floor(.38 * sr)), k = s; k < e; k++) {
+      const t = k / sr - t0, ph = bass[bar] * t;
+      data[k] += Math.sin(6.28318 * ph) * .38 * env(t, .02, .34);
+      data[k] += ((ph % 1) * 2 - 1) * .12 * env(t, .02, .28);
+    }
+    for (let s = Math.floor(t0 * sr), e = Math.min(n, s + Math.floor(.16 * sr)), k = s; k < e; k++) {
+      const t = k / sr - t0;
+      data[k] += (((arp[(i + bar) % 4] * t) % 1) * 2 - 1) * (beat % 2 ? .04 : .07) * env(t, .008, .14);
+    }
+    if (beat === 0 || beat === 4) {
+      for (let s = Math.floor(t0 * sr), e = Math.min(n, s + Math.floor(.18 * sr)), k = s; k < e; k++) {
+        const t = k / sr - t0, f = 70 * Math.pow(38 / 70, t / .12);
+        data[k] += Math.sin(6.28318 * f * t) * .34 * env(t, .004, .16);
+      }
+    }
+  }
+  let peak = 1e-6; for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(data[i]));
+  const buf = ctx.createBuffer(1, n, sr), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = data[i] / peak * .85;
+  return buf;
 }
 function startMusic() {
-  if (TEST || music.started) { setMusicGain(); return; }
+  if (TEST) return;
+  musicHint();
   if (!ensureAc()) return;
-  const ctx = ac, master = ctx.createGain(); master.gain.value = 0;
-  const delay = ctx.createDelay(); delay.delayTime.value = .28;
-  const fb = ctx.createGain(); fb.gain.value = .28;
-  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = 1800;
-  delay.connect(fb); fb.connect(delay); delay.connect(master);
-  filt.connect(master); master.connect(ctx.destination);
-  music.master = master; music.delay = delay; music.filt = filt; music.started = true; music.step = 0; music.next = ctx.currentTime + .05;
-  const bass = [69.3, 69.3, 92.5, 103.83, 77.78, 77.78, 92.5, 110], arp = [277.18, 329.63, 415.3, 493.88];
-  const tone = (freq, t, dur, type, peak, dest, slide) => {
-    const o = ctx.createOscillator(), g = ctx.createGain(); o.type = type; o.frequency.setValueAtTime(freq, t);
-    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + .02); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g); g.connect(dest); o.start(t); o.stop(t + dur + .02);
-  };
-  const tick = () => {
-    if (!music.started || !ac) return;
-    const ctx = ac, look = ctx.currentTime + .12;
-    if (music.next < ctx.currentTime - 1) music.next = ctx.currentTime;
-    while (music.next < look) {
-      const t = music.next, i = music.step, beat = i % 8, bar = (i >> 3) % 8;
-      if (beat % 2 === 0) tone(bass[bar], t, .36, 'sawtooth', .11, filt, bass[bar] * .5);
-      tone(arp[(i + bar) % 4], t, .14, 'square', beat % 2 ? .018 : .03, delay);
-      if (beat === 0 || beat === 4) {
-        const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(38, t + .12);
-        g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(0.0001, t + .18); o.connect(g); g.connect(master); o.start(t); o.stop(t + .2);
-      }
-      if (beat === 4) {
-        const n = ctx.createBufferSource(), buf = ctx.createBuffer(1, 2200, ctx.sampleRate), d = buf.getChannelData(0);
-        for (let k = 0; k < d.length; k++) d[k] = (Math.random() * 2 - 1) * (1 - k / d.length);
-        n.buffer = buf; const g = ctx.createGain(), hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
-        g.gain.setValueAtTime(.045, t); g.gain.exponentialRampToValueAtTime(0.0001, t + .12); n.connect(hp); hp.connect(g); g.connect(master); n.start(t);
-      }
-      music.step++; music.next += 60 / 96 / 2;
+  const ctx = ac;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (music.started) { setMusicGain(); return; }
+  try {
+    if (!music.buf) music.buf = bakeTheme(ctx);
+    if (!music.master) {
+      music.master = ctx.createGain(); music.master.gain.value = 0;
+      music.master.connect(ctx.destination);
     }
+    const src = ctx.createBufferSource(); src.buffer = music.buf; src.loop = true;
+    src.connect(music.master); src.start(0); music.src = src; music.started = true;
     setMusicGain();
-  };
-  music.timer = setInterval(tick, 40); tick(); setMusicGain();
+  } catch (e) { music.started = false; }
 }
 function grantPower(kind) {
   if (kind === 'magnet') { magT = 7.5; toast('MAGNET · shards pull in', 1400); }
@@ -647,7 +667,7 @@ if ($('shareBtn')) $('shareBtn').addEventListener('click', () => {
 });
 
 /* ---------- init ---------- */
-fillSkinSelect(); syncOpts(); applyLite();
+fillSkinSelect(); syncOpts(); applyLite(); musicHint();
 resetRun(); show('hud', false);
 if (TEST) window.NH = { THREE, scene, camera, setNoObstacles: v => noObstacles = v, step, begin, pause, resume, press, P, layout, posAt, player, chasers, log, CH, LANE, BASE, MAXS, GAP0, GAP_MIN, STAND_H, SLIDE_H, ensureWindow, setSeed: s => runSeed = s,
   get state() { return state; }, get score() { return score(); }, get level() { return level; }, get xp() { return xp; } };
