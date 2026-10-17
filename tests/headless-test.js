@@ -46,8 +46,12 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(NH.rebound === 0, 'one bounce consumes rebound'); ok(P.lane !== 0, 'bounce kicks to another lane (lane ' + P.lane + ')');
   P.inv = 0; addRow(P.k, Math.floor(P.s - P.k * NH.CH) + 8, P.lane, 'wall'); frames(80);
   ok(NH.log.stumbles.length >= 1, 'second wall after rebound spent = stumble');
-  fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; NH.setRebound(1); frames(2);
-  ok(NH.state === 'playing' && Math.abs(P.x) < NH.PATH_HALF - .2, 'rebound saves a path-edge clip (x ' + P.x.toFixed(2) + ')'); ok(NH.rebound === 0, 'edge bounce also spends the perk');
+  fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; NH.setRebound(1); const xRail = P.x; frames(2);
+  ok(NH.state === 'playing', 'rebound keeps the run alive at the rail'); ok(NH.rebound === 0, 'edge bounce spends the perk');
+  ok(Math.abs(P.x) > Math.abs(xRail), 'bounce carries the runner toward the building (x ' + P.x.toFixed(2) + ')');
+  let railPeak = Math.abs(P.x); frames(50, DT, () => { railPeak = Math.max(railPeak, Math.abs(P.x)); });
+  ok(railPeak > 6.5, 'rail save reaches the building face (' + railPeak.toFixed(2) + ')');
+  ok(Math.abs(P.x) < NH.PATH_HALF - .2, 'runner returns to the street after the building (x ' + P.x.toFixed(2) + ')');
   fresh(); P.x = NH.PATH_HALF + .2; P.lane = 1; frames(2);
   ok(NH.state === 'over', 'path-edge clip without rebound = caught');
   // extra TAP at a settled outer lane still clamps; HOLD into that rail is the fail/save
@@ -64,10 +68,13 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(P.lane !== -1 || Math.abs(P.x) < NH.PATH_HALF - .2, 'bounce kicks back onto the street (lane ' + P.lane + ', x ' + P.x.toFixed(2) + ')');
   ok(dom_('perkChip').classList.contains('hidden'), 'HUD hides Rebound after the save');
   NH.hold('left', false);
-  fresh(); NH.setRebound(1); const lane0 = P.lane; NH.press('wall');
-  ok(NH.rebound === 0, 'wall jump spends rebound'); ok(P.lane !== lane0, 'wall jump kicks to another lane (lane ' + P.lane + ')');
+  fresh(); const lane0 = P.lane; NH.press('wall');
+  ok(NH.rebound === 0, 'wall jump does not need the perk'); ok(P.lane !== lane0, 'wall jump picks a landing lane (lane ' + P.lane + ')');
   ok(NH.state === 'playing', 'wall jump keeps the run going');
-  NH.press('wall'); ok(NH.state === 'playing' && NH.rebound === 0, 'wall jump with no rebound does not catch you');
+  let jumpPeak = Math.abs(P.x); frames(70, DT, () => { jumpPeak = Math.max(jumpPeak, Math.abs(P.x)); });
+  ok(jumpPeak > 6.5, 'E/Enter reaches the building face (' + jumpPeak.toFixed(2) + ')');
+  ok(Math.abs(P.x) < 3.2, 'wall jump returns to the street (x ' + P.x.toFixed(2) + ')');
+  NH.press('wall'); ok(NH.state === 'playing', 'E/Enter wall jump works again immediately');
 
   // ---- stumble consequences & game over
   fresh(); tele(3, 0); addRow(3, 12, 0, 'wall'); addRow(3, 16, 0, 'wall'); const sp0 = P.speed; frames(60);

@@ -457,34 +457,49 @@ function resetRun(keepLoadout) {
   if (lo.hack) { hackT = 6; P.gap = Math.min(GAP0, P.gap + 5); }
   if (lo.rebound) rebound = 1;
   if (!keepLoadout && !TEST && (lo.shield || lo.magnet || lo.hack || lo.rebound)) { meta.loadout = {}; saveMeta(); }
-  edgeHold = 0; edgeT = 0;
+  edgeHold = 0; edgeT = 0; bounce = null;
   log.stumbles.length = 0; log.turns.length = 0; ensureLayout(AHEAD + 1); ensureWindow(); placeActors(0);
 }
 
 /* ---------- gameplay ---------- */
-const PATH_HALF = 5;                                          // road half-width; |x| past this is a side-rail clip
+const PATH_HALF = 5, BUILD_FACE = 7.5;                        // road edge, then the street-facing building plane
+let bounce = null;
 function noteHold(act, on) {                                  // extra TAP at the edge still clamps; HOLD into that same outer lane slams the rail
   if (act !== 'left' && act !== 'right') return;
   const dir = act === 'left' ? -1 : 1;
   if (on) { if (P.lane === dir && edgeHold !== dir) { edgeHold = dir; edgeT = 0; } }
   else if (edgeHold === dir) { edgeHold = 0; edgeT = 0; }
 }
+function launchBuildingBounce(side) {                         // run into the building face, then spring back to a lane
+  if (state !== 'playing') return false;
+  const face = (side >= 0 ? 1 : -1) * BUILD_FACE, away = face > 0 ? -1 : 1;
+  let nl = clamp(P.lane + away, -1, 1);
+  if (nl === P.lane) nl = clamp(away, -1, 1);
+  P.lane = nl; edgeHold = 0; edgeT = 0;
+  bounce = { vx: Math.sign(face) * 32, face, phase: 'out', age: 0 };
+  if (!P.jump) { P.jump = true; P.slide = 0; }
+  P.vy = Math.max(P.vy, 9); P.inv = Math.max(P.inv, 1.15);
+  beep(520, .05, 'triangle', .03);
+  return true;
+}
+function stepBounce(dt) {
+  bounce.age += dt; P.x += bounce.vx * dt;
+  const sign = Math.sign(bounce.face);
+  if (bounce.phase === 'out' && sign * P.x >= sign * (bounce.face - .45)) {
+    P.x = sign * (BUILD_FACE - .45); bounce.phase = 'back'; bounce.vx = -sign * 30;
+    P.vy = Math.max(P.vy, 8); P.stumble = .28; squash = 1.24; shake = .5; kick(.6); flash();
+    beep(980, .12, 'sine', .06); toast('Wall bounce — off the building', 1400);
+    fx('bounceFx'); burst(player.g.position.x, 1.2, player.g.position.z);
+  }
+  const home = P.lane * LANE, toward = -sign;
+  if (bounce.phase === 'back' && toward * (home - P.x) <= .2) { P.x = home; bounce = null; return; }
+  if (bounce && bounce.age > 1.4) { P.x = home; bounce = null; }
+}
 function wallBounce(wallX) {
   if (rebound <= 0 || state !== 'playing') return false;
-  rebound = 0; edgeHold = 0; edgeT = 0;
-  const wx = wallX == null ? (P.x >= 0 ? PATH_HALF : -PATH_HALF) : wallX;
-  let dir = P.x - wx;
-  if (Math.abs(dir) < .08) dir = P.x >= 0 ? -1 : 1;
-  else dir = Math.sign(dir);
-  let nl = clamp(P.lane + (dir > 0 ? 1 : -1), -1, 1);
-  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(nl + (dir > 0 ? 1 : -1), -1, 1);
-  if (Math.abs(nl * LANE - wx) < 1.05) nl = clamp(P.lane - (dir > 0 ? 1 : -1), -1, 1);
-  P.lane = nl; P.x = nl * LANE;
-  P.inv = Math.max(P.inv, .55); P.stumble = .22;
-  shake = .38; squash = 1.18; kick(.55); flash();
-  beep(980, .12, 'sine', .06); toast('Wall bounce — back on the street', 1400);
-  fx('bounceFx'); burst(player.g.position.x, 1.2, player.g.position.z);
-  return true;
+  rebound = 0;
+  const side = wallX == null || wallX === 0 ? (P.x >= 0 ? 1 : -1) : Math.sign(wallX);
+  return launchBuildingBounce(side);
 }
 function stumble(why) {
   if (P.inv > 0 || state !== 'playing') return;
@@ -506,20 +521,23 @@ function press(act) {                                         // single entry po
     P.lane = clamp(P.lane + (act === 'left' ? -1 : 1), -1, 1); beep(380, .04, 'triangle', .02);
   } else if (act === 'jump') { if (!P.jump) { P.jump = true; P.vy = JUMP_V; P.slide = 0; squash = 1.16; kick(.18); beep(600, .08, 'sine', .04); } }
   else if (act === 'slide') { if (P.jump) { P.vy = -22; P.queueSlide = true; } else { P.slide = .75; squash = .72; kick(.16); } }
-  else if (act === 'wall') {
-    if (wallBounce()) return;
-    beep(120, .08, 'sawtooth', .03); toast('No wall bounce armed', 1100);
-  }
+  else if (act === 'wall') launchBuildingBounce(P.x >= 0 ? 1 : -1);
 }
 function updRun(dt) {
   P.speed = Math.min(MAXS, P.speed + ACC * dt); const s0 = P.s; P.s += P.speed * dt;
-  if (Math.abs(P.x) > PATH_HALF - .4) {
-    lastWhy = 'rail';
-    if (!wallBounce(Math.sign(P.x) * PATH_HALF)) { P.x = clamp(P.x, -(PATH_HALF - .45), PATH_HALF - .45); caught(); return; }
+  if (bounce) stepBounce(dt);
+  else {
+    if (Math.abs(P.x) > PATH_HALF - .4) {
+      lastWhy = 'rail';
+      if (!wallBounce(Math.sign(P.x) * PATH_HALF)) { P.x = clamp(P.x, -(PATH_HALF - .45), PATH_HALF - .45); caught(); return; }
+    }
+    if (bounce) stepBounce(dt);
+    else {
+      if (!(edgeHold && P.lane === edgeHold)) edgeT = 0; else edgeT += dt;
+      const slam = edgeHold && P.lane === edgeHold && edgeT > .14;
+      P.x = damp(P.x, slam ? edgeHold * PATH_HALF : P.lane * LANE, slam ? 16 : 22, dt);
+    }
   }
-  if (!(edgeHold && P.lane === edgeHold)) edgeT = 0; else edgeT += dt;
-  const slam = edgeHold && P.lane === edgeHold && edgeT > .14;
-  P.x = damp(P.x, slam ? edgeHold * PATH_HALF : P.lane * LANE, slam ? 16 : 22, dt);
   P.sinceHit += dt; P.inv = Math.max(0, P.inv - dt); P.stumble = Math.max(0, P.stumble - dt); P.slide = Math.max(0, P.slide - dt);
   magT = Math.max(0, magT - dt); hackT = Math.max(0, hackT - dt);
   squash = damp(squash, P.slide > 0 ? .74 : 1, 14, dt);
@@ -573,7 +591,7 @@ function placeActors(dt) {
   const p = posAt(P.s, P.x); P.yaw += angDiff(P.yaw, p.th) * (1 - Math.exp(-10 * Math.max(dt, .016)));
   const catching = catchT > 0, sl = P.slide > 0 && !P.jump, wk = state === 'playing' ? 1 : 0; P.walk += dt * (12 + P.speed * .4);
   const g = player.g; g.position.set(p.x + P.ox, P.y, p.z + P.oz); g.rotation.y = P.yaw + (catching ? Math.sin(time * 18) * .12 : 0);
-  g.rotation.x = catching ? .22 : 0; g.rotation.z = -(P.lane * LANE - P.x) * .06 + (catching ? Math.sin(time * 22) * .18 : 0);
+  g.rotation.x = catching ? .22 : 0; g.rotation.z = -(P.lane * LANE - P.x) * .06 + (catching ? Math.sin(time * 22) * .18 : 0) + (bounce ? -bounce.vx * .012 : 0);
   g.scale.set(catching ? 1.04 : 1, squash * (catching ? .88 : 1), catching ? 1.04 : 1);
   H.animate(player, { phase: P.walk, run: catching ? 0 : wk, air: P.jump || P.queueSlide, slide: sl, stumble: P.stumble > 0 || catching, catch: catching, speed01: (P.speed - BASE) / (MAXS - BASE) * .6 + .4, lat: P.lane * LANE - P.x }, dt);
   g.visible = P.inv <= 0 || Math.floor(time * 16) % 2 === 0; blob.position.set(g.position.x, .06, g.position.z); blob.rotation.z = P.yaw; blob.scale.setScalar(Math.max(.4, 1 - P.y * .25));
@@ -697,7 +715,7 @@ function showMenu(which) {
   if (which === 'store') fillStore();
 }
 function begin() { for (const id of ['title', 'pause', 'over', 'catch']) show(id, false); show('hud', true); catchT = 0; resetRun(); state = 'playing'; setTouch(true); setMusicGain();
-  toast(rebound ? 'Wall bounce armed — E or Enter to wall jump' : (settings.daily ? 'Daily street · same course worldwide today' : 'Run! First gates after a short stretch'), 1800); }
+  toast('E or Enter bounces off a building' + (rebound ? ' · wall bounce armed' : ''), 1800); }
 function toTitle() {
   catchT = 0; state = 'title'; setTouch(false); show('hud', false);
   for (const id of ['pause', 'over', 'catch']) show(id, false);
