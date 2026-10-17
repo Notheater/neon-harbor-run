@@ -68,13 +68,15 @@ JSDOM.fromFile(path.resolve(__dirname, '..', 'index.html'), { runScripts: 'dange
   ok(P.lane !== -1 || Math.abs(P.x) < NH.PATH_HALF - .2, 'bounce kicks back onto the street (lane ' + P.lane + ', x ' + P.x.toFixed(2) + ')');
   ok(dom_('perkChip').classList.contains('hidden'), 'HUD hides Rebound after the save');
   NH.hold('left', false);
-  fresh(); const lane0 = P.lane; NH.press('wall');
-  ok(NH.rebound === 0, 'wall jump does not need the perk'); ok(P.lane !== lane0, 'wall jump picks a landing lane (lane ' + P.lane + ')');
+  fresh(); NH.setRebound(1); const lane0 = P.lane; NH.press('wall');
+  ok(NH.rebound === 0, 'wall jump spends rebound'); ok(P.lane !== lane0, 'wall jump kicks to another lane (lane ' + P.lane + ')');
   ok(NH.state === 'playing', 'wall jump keeps the run going');
-  let jumpPeak = Math.abs(P.x); frames(70, DT, () => { jumpPeak = Math.max(jumpPeak, Math.abs(P.x)); });
-  ok(jumpPeak > 6.5, 'E/Enter reaches the building face (' + jumpPeak.toFixed(2) + ')');
-  ok(Math.abs(P.x) < 3.2, 'wall jump returns to the street (x ' + P.x.toFixed(2) + ')');
-  NH.press('wall'); ok(NH.state === 'playing', 'E/Enter wall jump works again immediately');
+  const land = P.lane; let jumpPeak = Math.abs(P.x);
+  frames(90, DT, () => { jumpPeak = Math.max(jumpPeak, Math.abs(P.x)); });
+  jumpPeak = Math.max(jumpPeak, Math.abs(P.x));
+  ok(jumpPeak > 6.5, 'wall jump reaches the building face (|x| ' + jumpPeak.toFixed(2) + ')');
+  ok(NH.state === 'playing' && Math.abs(P.x - land * NH.LANE) < .45, 'wall jump returns near the landing lane (x ' + P.x.toFixed(2) + ', lane ' + P.lane + ')');
+  NH.press('wall'); ok(NH.state === 'playing' && NH.rebound === 0, 'wall jump with no rebound does not catch you');
 
   // ---- inventory lists every outfit, perk, and the shard bank
   NH.fillInventory();
